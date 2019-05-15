@@ -1,0 +1,13 @@
+gunicorn
+uvicorn
+starlette
+databases
+orm
+boto3
+dnspython
+kubernetes
+aiohttp
+aiomysql
+aiosqlite
+python-multipart
+mysqlclient
