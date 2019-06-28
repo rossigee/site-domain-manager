@@ -252,14 +252,15 @@ class Manager:
                 changes_made = True
 
         # Check/manage additional 'A' records as specified (typically 'www')
-        for prefix in domain.update_a_records.split(","):
-            a_record = f"{prefix}.{domain.name}"
-            if dns_a_record_already_set(a_record):
-                _logger.info(f"DNS A record for {a_record} with {agent.label} as expected.")
-            else:
-                await agent.create_new_a_rr(domain.name, a_record, hosting_ips)
-                _logger.info(f"DNS A record for {a_record} updated to {hosting_ips}.")
-                changes_made = True
+        if len(domain.update_a_records) > 0:
+            for prefix in domain.update_a_records.split(","):
+                a_record = f"{prefix}.{domain.name}"
+                if dns_a_record_already_set(a_record):
+                    _logger.info(f"DNS A record for {a_record} with {agent.label} as expected.")
+                else:
+                    await agent.create_new_a_rr(domain.name, a_record, hosting_ips)
+                    _logger.info(f"DNS A record for {a_record} updated to {hosting_ips}.")
+                    changes_made = True
 
         return "OK" if not changes_made else "DNS updates applied."
 
@@ -292,10 +293,12 @@ class Manager:
                     hostnames_by_waf[d.waf.id] = []
                 if d.update_apex:
                     hostnames_by_waf[d.waf.id].append(d.name)
-                for prefix in d.update_a_records.split(","):
-                    hostnames_by_waf[d.waf.id].append(f"{prefix}.{d.name}")
+                if len(d.update_a_records) > 0:
+                    for prefix in d.update_a_records.split(","):
+                        hostnames_by_waf[d.waf.id].append(f"{prefix}.{d.name}")
 
             # For each WAFs involved, update it's list of SSL certs to manage
+            failed_aliases = []
             for waf_id in hostnames_by_waf.keys():
                 aliases = hostnames_by_waf[waf_id]
                 waf = await WAFProvider.objects.get(id=waf_id)
@@ -306,6 +309,13 @@ class Manager:
                 success = await agent.deploy_certificate(site.label, site.label, aliases)
                 if success:
                     _logger.info(f"Updated SSL configuration to include {len(aliases)} hostnames for {waf.label} for {site.label}...")
+                else:
+                    failed_aliases.merge(aliases)
+
+            if len(failed_aliases) > 0:
+                return f"Failed to update SSL config for {len(failed_aliases)} aliases."
+            else:
+                return "OK"
 
         except Exception as e:
             _logger.exception(e)
