@@ -58,5 +58,5 @@ class DNSProviderAgent():
     async def check_google_site_verification(self, domain):
         raise NotImplementedError
 
-    async def set_google_site_verification(self, domain, gsv_code):
+    async def set_google_site_verification(self, domain):
         raise NotImplementedError
