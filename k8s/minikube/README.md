@@ -35,8 +35,15 @@ Add hostname to your `/etc/hosts`:
 192.168.99.100 sdmgr.local
 ```
 
+Create a self-signed SSL certificate, and deploy it to minikube.
+
+```
+openssl req -x509 -nodes -subj '/CN=sdmgr.local' -addext "subjectAltName = DNS:sdmgr.local" -newkey rsa:4096 -keyout privkey.pem -out cert.pem -days 365
+kubectl create secret tls sdmgr-tls --key privkey.pem --cert cert.pem
+```
+
+Add it as a 'server' certificate to your browser too (i.e. via `chrome://settings`), to avoid CORS errors if you use the web UI.
+
 Then, head on over to:
 
 * (https://sdmgr.local/)
-
-Ignore the SSL error (or fix it).
