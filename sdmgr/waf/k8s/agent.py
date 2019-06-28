@@ -23,7 +23,7 @@ class K8S(WAFProviderAgent):
         # WAF targets
         k8s_config = kubernetes.client.Configuration()
         k8s_config.host = os.environ['K8S_API_URL']
-        k8s_config.api_key = os.environ['K8S_API_TOKEN']
+        k8s_config.api_key = {"authorization": "Bearer " + os.environ['K8S_API_TOKEN']}
         k8s_config.verify_ssl = False
         self.namespace = os.environ['K8S_WAF_NAMESPACE']
         self.context = os.environ['K8S_WAF_CONTEXT']
