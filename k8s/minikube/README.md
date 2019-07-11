@@ -29,6 +29,12 @@ Feed the docker image in:
 docker save sdmgr | (eval $(minikube docker-env) && docker load)
 ```
 
+Kill the existing pod running the older container image.
+
+```
+kubectl delete pod -l workload=app
+```
+
 Add hostname to your `/etc/hosts`:
 
 ```
