@@ -32,6 +32,9 @@ class RegistrarAgent():
     async def get_registered_domains(self):
         raise NotImplementedError
 
+    async def get_status(self, domainname):
+        raise NotImplementedError
+
     async def _populate_domains(self):
         registrar = await Registrar.objects.get(id = self.id)
         for domainname in await self.get_registered_domains():

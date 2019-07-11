@@ -104,7 +104,13 @@ async def check_site_ssl(request):
 async def list_domains(request):
     if not request.user.is_authenticated:
         return UnauthenticatedResponse()
-    return JSONResponse({"domains": [await domain.serialize() for domain in await Domain.objects.all()]})
+    if 'name' in request.query_params:
+        name = request.query_params['name']
+        _logger.info(f"Search domains for: {name}")
+        domains = await Domain.objects.filter(name__icontains=name).all()
+    else:
+        domains = await Domain.objects.all()
+    return JSONResponse({"domains": [await domain.serialize() for domain in domains]})
 
 @app.route("/domains", methods=["POST"])
 async def add_domain(request):
@@ -120,6 +126,15 @@ async def add_domain(request):
 
     await Domain.objects.create(**data)
     return JSONResponse(await domain.serialize())
+
+@app.route("/domains/{id:int}", methods=["GET"])
+async def get_domain(request):
+    if not request.user.is_authenticated:
+        return UnauthenticatedResponse()
+    id = request.path_params['id']
+    _logger.info(f"Get domain by id: {id}")
+    domain = await Domain.objects.get(id=id)
+    return JSONResponse({"domain": await domain.serialize()})
 
 @app.route("/domains/{id:int}", methods=["PUT"])
 async def update_domain(request):
@@ -266,6 +281,26 @@ async def refresh_dns_provider(request):
     status = await agent.refresh()
     return JSONResponse({"status":status})
 
+@app.route("/dns_providers/{id:int}/domains/{domainname}/status", methods=["GET"])
+async def get_dns_provider_status_for_domain(request):
+    """
+    summary: Fetch the status of a domain from the nameservice provider.
+    description: Used to show the current status of the domain's name servers, including their main NS records.
+    responses:
+      200:
+        description:
+        examples:
+          {"status": {"summary":"OK", "nameservers": ["ns1", "ns2", "ns3"]}}
+    """
+    if not request.user.is_authenticated:
+        return UnauthenticatedResponse()
+    id = request.path_params['id']
+    domainname = request.path_params['domainname']
+    agent = m.dns_agents[id]
+    status = await agent.get_status(domainname)
+    return JSONResponse({"status":status})
+
+
 @app.route("/registrars", methods=["GET"])
 async def list_registrars(request):
     if not request.user.is_authenticated:
@@ -273,7 +308,7 @@ async def list_registrars(request):
     return JSONResponse({"registrars": [await registrar.serialize() for registrar in await Registrar.objects.all()]})
 
 @app.route("/registrars/{id:int}/csvfile", methods=["POST"])
-async def update_marcaria_by_csv_file(request):
+async def update_registrar_by_csv_file(request):
     """
     summary: Upload fresh CSV file downloaded from registrar.
     description: Intended for use with the Marcaria module.
@@ -292,6 +327,25 @@ async def update_marcaria_by_csv_file(request):
     await agent.update_from_csvfile(form["csvfile"])
 
     return JSONResponse({"status":"ok"}, status_code=201)
+
+@app.route("/registrars/{id:int}/domains/{domainname}/status", methods=["GET"])
+async def get_registrar_status_for_domain(request):
+    """
+    summary: Fetch the status of a domain from the registrar.
+    description: Used to show the current status and expiry date of a given domain with the registrar. This can fetch the data directly from the registrar's API, or use cached data from a recent CSV download, depending on the registrar's capabilities.
+    responses:
+      200:
+        description:
+        examples:
+          {"status": {"summary":"expired", "expiry_date": "2020-01-01"}}
+    """
+    if not request.user.is_authenticated:
+        return UnauthenticatedResponse()
+    id = request.path_params['id']
+    domainname = request.path_params['domainname']
+    agent = m.registrar_agents[id]
+    status = await agent.get_status(domainname)
+    return JSONResponse({"status":status})
 
 @app.route("/hosting/{id:int}/refresh", methods=["GET"])
 async def refresh_hosting_provider(request):
@@ -393,5 +447,9 @@ async def shutdown():
 def main():
     uvicorn.run(app, host='0.0.0.0', port=8000)
 
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    if sys.argv[-1] == "schema":
+        schema = schemas.get_schema(routes=app.routes)
+        print(yaml.dump(schema, default_flow_style=False))
+    else:
+        main()

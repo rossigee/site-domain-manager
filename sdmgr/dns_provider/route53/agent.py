@@ -102,6 +102,18 @@ class Route53(DNSProviderAgent):
     async def get_hosted_domains(self):
         return self.domains.keys()
 
+    async def get_status(self, domain):
+        if domain not in self.domains:
+            return {
+                'summary': f"No information for '{domain}'"
+            }
+        zone_id = self._get_zone_id_for_domain(domain)
+        return {
+            'name': domain,
+            'summary': f"OK (R53 Zone: {zone_id})",
+            'nameservers': await self.get_ns_records(domain),
+        }
+
     async def get_ns_records(self, domain):
         zone_id = self._get_zone_id_for_domain(domain)
         response = self.client.list_resource_record_sets(

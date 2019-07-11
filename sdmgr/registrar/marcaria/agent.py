@@ -52,11 +52,14 @@ class Marcaria(RegistrarAgent):
                 if header_row is None:
                     header_row = row
                     continue
-                if row[1] != "Registered":
-                    continue
+                p = row[4].split('/')
+                expiry_date = None
+                if len(p) == 3:
+                    expiry_date = "{0:04}-{1:02}-{2:02}".format(int(p[2]), int(p[1]), int(p[0]))
                 self.domains[row[0]] = {
                     'name': row[0],
-                    'expiry_date': row[4], # TODO: Parse date
+                    'status': row[1],
+                    'expiry_date': expiry_date,
                     'auto_renew': row[8] == "ON"
                 }
 
@@ -70,8 +73,26 @@ class Marcaria(RegistrarAgent):
 
         await self._populate_domains()
 
+    async def get_status(self, domainname):
+        if domainname not in self.domains:
+            return {
+                'summary': f"No information for '{domainname}'"
+            }
+        domain = self.domains[domainname]
+        return {
+            'name': domainname,
+            'summary': domain['status'],
+            'expiry_date': domain['expiry_date'],
+            'auto_renew': domain['auto_renew'],
+        }
+
     async def get_registered_domains(self):
-        return self.domains.keys()
+        domains = []
+        for domainname in self.domains.keys():
+            domain = self.domains[domainname]
+            if domain['status'] == "Registered":
+                domains.append(domainname)
+        return domains
 
     async def set_ns_records(self, domain, nameservers):
         # TODO: Send notification to someone (i.e. via email/Discord). Don't

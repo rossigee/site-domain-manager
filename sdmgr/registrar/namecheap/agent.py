@@ -92,6 +92,19 @@ class Namecheap(RegistrarAgent):
     async def get_registered_domains(self):
         return self.domains.keys()
 
+    async def get_status(self, domainname):
+        if domainname not in self.domains:
+            return {
+                'summary': f"No information for '{domainname}'"
+            }
+        domain = self.domains[domainname]
+        return {
+            'name': domainname,
+            'summary': domain['status'],
+            'expiry_date': domain['expiry_date'],
+            'auto_renew': domain['auto_renew'],
+        }
+
     async def set_ns_records(self, domain, nameservers):
         _logger.info(f"Updating the NS records on {self.label} for {domain.name}.")
 

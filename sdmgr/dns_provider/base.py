@@ -32,6 +32,9 @@ class DNSProviderAgent():
     async def get_hosted_domains(self):
         raise NotImplementedError
 
+    async def get_status(self, domainname):
+        raise NotImplementedError
+
     async def _populate_domains(self):
         try:
             dns = await DNSProvider.objects.get(id = self.id)
