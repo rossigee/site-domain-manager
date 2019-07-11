@@ -18,9 +18,9 @@ class Cloudways(HostingAgent):
         HostingAgent.__init__(self, data)
         _logger.info(f"Initialising Cloudways hosting provider agent (id: {self.id}): {self.label}")
 
-        self.api_email = os.environ['CLOUDWAYS_API_EMAIL']
-        self.api_key = os.environ['CLOUDWAYS_API_KEY']
-        self.letsencrypt_email = os.environ['LETSENCRYPT_EMAIL']
+        self.api_email = os.getenv('CLOUDWAYS_API_EMAIL')
+        self.api_key = os.getenv('CLOUDWAYS_API_KEY')
+        self.letsencrypt_email = os.getenv('LETSENCRYPT_EMAIL')
 
         self.headers = None
         self.token_expires = None

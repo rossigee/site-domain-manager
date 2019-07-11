@@ -22,11 +22,11 @@ class K8S(WAFProviderAgent):
         # TODO: a better mechanism as this prevents configuration of multiple
         # WAF targets
         k8s_config = kubernetes.client.Configuration()
-        k8s_config.host = os.environ['K8S_API_URL']
-        k8s_config.api_key = {"authorization": "Bearer " + os.environ['K8S_API_TOKEN']}
+        k8s_config.host = os.getenv('K8S_API_URL')
+        k8s_config.api_key = {"authorization": "Bearer " + os.getenv('K8S_API_TOKEN')}
         k8s_config.verify_ssl = False
-        self.namespace = os.environ['K8S_WAF_NAMESPACE']
-        self.context = os.environ['K8S_WAF_CONTEXT']
+        self.namespace = os.getenv('K8S_WAF_NAMESPACE')
+        self.context = os.getenv('K8S_WAF_CONTEXT')
 
         self.api_client = kubernetes.client.ApiClient(k8s_config)
         self.apps_v1 = kubernetes.client.AppsV1beta2Api(self.api_client)
