@@ -27,6 +27,56 @@ spec:
       - env:
         - name: DATABASE_URL
           value: mysql+mysqldb://sdmgr:sdmgr@db/sdmgr
+        - name: CLOUDWAYS_API_EMAIL
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: cloudways.api_email
+        - name: CLOUDWAYS_API_TOKEN
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: cloudways.api_token
+        - name: LETSENCRYPT_EMAIL
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: cloudways.letsencrypt_email
+        - name: K8S_API_URL
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: k8s.api_url
+        - name: K8S_API_TOKEN
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: k8s.api_token
+        - name: K8S_WAF_CONTEXT
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: k8s.waf_context
+        - name: K8S_WAF_NAMESPACE
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: k8s.waf_namespace
+        - name: NAMECHEAP_API_USER
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: namecheap.api_user
+        - name: NAMECHEAP_API_TOKEN
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: namecheap.api_token
+        - name: NAMECHEAP_CLIENT_IP
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: namecheap.client_ip
         image: sdmgr:latest
         imagePullPolicy: IfNotPresent
         name: app
