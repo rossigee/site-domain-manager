@@ -1,3 +1,4 @@
+import os
 import asyncio
 import aiodns
 import orm
@@ -38,48 +39,53 @@ class Manager:
         # TODO: Connect to Google to fetch/verify the GSV codes via API?
 
     async def __init_agents(self):
+        def import_agent(agent_module_name):
+            try:
+                agent_module = importlib.import_module(agent_module_name)
+                agent_class = getattr(agent_module, "Agent")
+                return agent_class(agentdata)
+            except Exception as e:
+                _logger.exception(e)
+                return None
+
         try:
             coros = []
 
             _logger.debug("Initialising Registrar agents...")
             agents = await Registrar.objects.filter(active=True).all()
             for agentdata in agents:
-                agent_module = importlib.import_module(agentdata.agent_module)
-                agent_class = getattr(agent_module, "Agent")
-                agent = agent_class(agentdata)
-                coros.append(agent.start())
-                self.registrar_agents[agent.id] = agent
+                agent = import_agent(agentdata.agent_module)
+                if agent != None:
+                    coros.append(agent.start())
+                    self.registrar_agents[agent.id] = agent
 
             _logger.debug("Initialising DNS provider agents...")
             agents = await DNSProvider.objects.filter(active=True).all()
             for agentdata in agents:
-                agent_module = importlib.import_module(agentdata.agent_module)
-                agent_class = getattr(agent_module, "Agent")
-                agent = agent_class(agentdata)
-                coros.append(agent.start())
-                self.dns_agents[agent.id] = agent
+                agent = import_agent(agentdata.agent_module)
+                if agent != None:
+                    coros.append(agent.start())
+                    self.dns_agents[agent.id] = agent
 
             _logger.debug("Initialising site hosting agents...")
             agents = await Hosting.objects.filter(active=True).all()
             for agentdata in agents:
-                agent_module = importlib.import_module(agentdata.agent_module)
-                agent_class = getattr(agent_module, "Agent")
-                agent = agent_class(agentdata)
-                coros.append(agent.start())
-                self.hosting_agents[agent.id] = agent
+                agent = import_agent(agentdata.agent_module)
+                if agent != None:
+                    coros.append(agent.start())
+                    self.hosting_agents[agent.id] = agent
 
             _logger.debug("Initialising WAF provider agents...")
             agents = await WAFProvider.objects.filter(active=True).all()
             for agentdata in agents:
-                agent_module = importlib.import_module(agentdata.agent_module)
-                agent_class = getattr(agent_module, "Agent")
-                agent = agent_class(agentdata)
-                coros.append(agent.start())
-                self.waf_agents[agent.id] = agent
+                agent = import_agent(agentdata.agent_module)
+                if agent != None:
+                    coros.append(agent.start())
+                    self.waf_agents[agent.id] = agent
 
             _logger.debug("Starting agents...")
             for coro in coros:
-                await asyncio.create_task(coro)
+                await coro
             _logger.debug("Started agents.")
 
         except Exception as e:
@@ -404,14 +410,15 @@ class Manager:
         await self.__init_agents()
 
         # Prepare the main manager loop
-        async def monitoring_loop():
-            _logger.info("Starting monitoring event loop.")
+        async def monitoring_loop(frequency):
+            _logger.info("Starting monitoring event loop, to run every {frequency} secs.")
             try:
                 while True:
                     asyncio.create_task(self.check_all_active_domains())
-                    await asyncio.sleep(600)
+                    await asyncio.sleep(frequency)
             except Exception as e:
                 _logger.exception(e)
 
-        asyncio.create_task(monitoring_loop())
-        _logger.debug("Running monitoring event loop...")
+        frequency = int(os.getenv("MANAGER_LOOP_SECS", "0"))
+        if frequency > 0:
+            asyncio.create_task(monitoring_loop(frequency))
