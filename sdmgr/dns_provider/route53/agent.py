@@ -102,7 +102,7 @@ class Route53(DNSProviderAgent):
     async def get_hosted_domains(self):
         return self.domains.keys()
 
-    async def get_status(self, domain):
+    async def get_status_for_domain(self, domain):
         if domain not in self.domains:
             return {
                 'summary': f"No information for '{domain}'"

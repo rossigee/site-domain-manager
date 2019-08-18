@@ -1,158 +1,144 @@
-from starlette.applications import Starlette
-from starlette.middleware.authentication import AuthenticationMiddleware
-from starlette.schemas import SchemaGenerator
+from fastapi import Depends, FastAPI, File, HTTPException
+from fastapi.security import OAuth2PasswordRequestForm
 from starlette.responses import JSONResponse
+from starlette.middleware.cors import CORSMiddleware
+
 import uvicorn
 
 from sdmgr import settings, manager
 from sdmgr.db import *
-from sdmgr.basicauth import BasicAuthBackend, UnauthenticatedResponse
+from sdmgr.oauth2 import *
+
+import os
+import sys
+import datetime
+import signal
+import asyncio
 
 import logging
 _logger = logging.getLogger(__name__)
 
 
-schemas = SchemaGenerator({
-    "openapi": "3.0.0",
-    "info": {
-        "title": "Sites and Domains Manager API",
-        "version": "0.0.1",
-        "description": "Background daemon process and REST API for managing web sites, domain registrations, DNS entries, WAFs and SSL certificates.",
-        "contact": {
-            "name": "Ross Golder",
-            "email": "ross@golder.org"
-        }
-    }
-})
+m: manager.Manager = None
 
-app = Starlette(debug=True)
-app.add_middleware(AuthenticationMiddleware, backend=BasicAuthBackend())
-app.debug = settings.DEBUG
+app = FastAPI(
+    title="Site Domain Manager",
+    description="Automating management of sites and domains.",
+    version="0.0.1",
+    openapi_prefix=os.getenv("OPENAPI_PREFIX", ""),
+)
 
-m = None # Manager
+# Set up CORS
+origins = [
+    "https://sdmgr.agentdesign.co.uk",
+    "https://sdmgr.local",
+    "http://localhost:4200",
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], #origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.route("/sites", methods=["GET"])
-async def list_sites(request):
-    """
-    summary: List sites.
-    responses:
-      200:
-        description: A list of sites.
-        examples:
-          [{"id": 1, "label": "Our Main Site"}]
-    """
-    if not request.user.is_authenticated:
-        return UnauthenticatedResponse()
+@app.post("/token", tags=["auth"], include_in_schema=False)
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    if "pytest" in sys.modules:
+        from sdmgr.auth.test import auth
+    else:
+        from sdmgr.auth.ldap import auth
+    await auth(form_data.username, form_data.password)
+
+    _logger.info(f"Providing access token for {form_data.username}.")
+    access_token_expires = datetime.timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={
+            "sub": form_data.username
+        }, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
+@app.get("/sites", tags=["sites"])
+async def list_sites(label = None, user = Depends(get_current_user)):
+    if label:
+        _logger.info(f"User '{user.username}' searching sites for: {label}")
+        sites = await Site.objects.filter(label__icontains=label).all()
+    else:
+        _logger.info(f"User '{user.username}' listing all sites.")
+        sites = await Site.objects.all()
     return JSONResponse({
-        "sites": [await site.serialize() for site in await Site.objects.all()]
+        "sites": [await site.serialize() for site in sites]
     })
 
-@app.route("/sites", methods=["POST"])
-async def add_site(request):
-    """
-    summary: Add a new site.
-    responses:
-      201:
-        description: A site.
-        examples:
-          {"id": 1, "label": "Our Main Site", "active": True}
-    """
-    if not request.user.is_authenticated:
-        return UnauthenticatedResponse()
-    data = await request.json()
-    site, errors = Site.validate_or_error(data)
-    if errors:
-        return JSONResponse(dict(errors), status_code=400)
-    await Site.objects.create(site)
-    return JSONResponse(dict(site))
 
-@app.route("/sites", methods=["PUT"])
-async def add_site(request):
-    if not request.user.is_authenticated:
-        return UnauthenticatedResponse()
-    data = await request.json()
-    site, errors = Site.validate_or_error(data)
-    if errors:
-        return JSONResponse(dict(errors), status_code=400)
-    await Site.objects.create(site)
-    return JSONResponse(dict(site))
+@app.get("/sites/{id:int}", tags=["sites"])
+async def get_site(id: int, user = Depends(get_current_user)):
+    site = await Site.objects.get(id=id)
+    _logger.info(f"User '{user.username}' fetching site '{site.label}'.")
+    return JSONResponse({
+        "site": await site.serialize()
+    })
 
-@app.route("/sites/{id:int}/check/ssl", methods=["GET"])
-async def check_site_ssl(request):
+#@app.post("/sites", tags=["sites"])
+#async def add_site(site, user = Depends(get_current_user)):
+#    _logger.info(f"User '{user.username}' adding new site '{site.label}'.")
+#    await Site.objects.create(site)
+#    return JSONResponse(dict(site))
+
+#@app.put("/sites/{id:int}", tags=["sites"])
+#async def update_site(site, user = Depends(get_current_user)):
+#    _logger.info(f"User '{user.username}' updating site '{site.label}'.")
+#    await Site.objects.update(site)
+#    return JSONResponse(dict(site))
+
+@app.get("/sites/{id:int}/check/ssl", tags=["sites"])
+async def check_site_ssl(id: int, user = Depends(get_current_user)):
     """
-    summary: Check the SSL configuration for this site.
-    responses:
-      200:
-        description: Check triggered
-        examples:
-          {"status": "ok"}
+    Check the SSL configuration for this site.
     """
-    if not request.user.is_authenticated:
-        return UnauthenticatedResponse()
-    id = request.path_params['id']
     site = await Site.objects.get(id = id)
+    _logger.info(f"User '{user.username}' checking SSL for site '{site.label}'.")
     status = await m.check_site_ssl_certs(site)
+
     return JSONResponse({
         "site": {
             "id": id,
             "label": site.label
         },
-        "status":status
+        "status": status
     })
 
-@app.route("/domains", methods=["GET"])
-async def list_domains(request):
-    if not request.user.is_authenticated:
-        return UnauthenticatedResponse()
-    if 'name' in request.query_params:
-        name = request.query_params['name']
-        _logger.info(f"Search domains for: {name}")
+@app.get("/domains", tags=["domains"])
+async def list_domains(name = None, user = Depends(get_current_user)):
+    if name:
+        _logger.info(f"User '{user.username}' searching domains for: {name}")
         domains = await Domain.objects.filter(name__icontains=name).all()
     else:
+        _logger.info(f"User '{user.username}' listing domains.")
         domains = await Domain.objects.all()
-    return JSONResponse({"domains": [await domain.serialize() for domain in domains]})
+    return JSONResponse({
+        "domains": [await domain.serialize() for domain in domains]
+    })
 
-@app.route("/domains", methods=["POST"])
-async def add_domain(request):
-    if not request.user.is_authenticated:
-        return UnauthenticatedResponse()
-    data = await request.json()
-    if 'registrar' in data.keys():
-        registrar_id = data['registrar'];
-        data['registrar'] = await Registrar.objects.get(id=registrar_id)
-    domain, errors = Domain.validate_or_error(data)
-    if errors:
-        return JSONResponse(dict(errors), status_code=400)
+@app.get("/domains/{id:int}", tags=["domains"])
+async def get_domain(id: int, user = Depends(get_current_user)):
+    domain = await Domain.objects.get(id=id)
+    _logger.info(f"User '{user.username}' fetching domain '{domain.name}'.")
+    return JSONResponse({
+        "domain": await domain.serialize()
+    })
 
-    await Domain.objects.create(**data)
+@app.post("/domains", tags=["domains"])
+async def add_domain(domain, user = Depends(get_current_user)):
+    _logger.info(f"User '{user.username}' adding new domain '{domain.name}'.")
+    await Domain.objects.create(domain)
     return JSONResponse(await domain.serialize())
 
-@app.route("/domains/{id:int}", methods=["GET"])
-async def get_domain(request):
-    if not request.user.is_authenticated:
-        return UnauthenticatedResponse()
-    id = request.path_params['id']
-    _logger.info(f"Get domain by id: {id}")
-    domain = await Domain.objects.get(id=id)
-    return JSONResponse({"domain": await domain.serialize()})
-
-@app.route("/domains/{id:int}", methods=["PUT"])
-async def update_domain(request):
-    """
-    summary: Update a domain.
-    responses:
-      200:
-        description: A list of update actions taken.
-        examples:
-          {"status": "ok", "actions": ["Updated a field to this value"]}
-    """
-    if not request.user.is_authenticated:
-        return UnauthenticatedResponse()
-    id = request.path_params['id']
-    data = await request.json()
-    newdomain, errors = Domain.validate_or_error(data)
-    if errors:
-        return JSONResponse(dict(errors), status_code=400)
+@app.put("/domains/{id:int}", tags=["domains"])
+async def update_domain(id: int, domain, user = Depends(get_current_user)):
+    _logger.info(f"User '{user.username}' updating domain '{domain.name}'.")
     domain = await Domain.objects.get(id = id)
 
     update_kwargs = {}
@@ -180,19 +166,11 @@ async def update_domain(request):
         "actions": actions
     })
 
-@app.route("/domains/{id:int}/check/ns", methods=["GET"])
-async def check_domain_ns(request):
+@app.get("/domains/{id:int}/check/ns", tags=["domains"])
+async def check_domain_ns(id: int, user = Depends(get_current_user)):
     """
-    summary: Check the NS records for this domain.
-    responses:
-      200:
-        description: Check triggered
-        examples:
-          {"status": "ok"}
+    Check the DNS NS records for this domain.
     """
-    if not request.user.is_authenticated:
-        return UnauthenticatedResponse()
-    id = request.path_params['id']
     domain = await Domain.objects.get(id = id)
     status = await m.check_domain_ns_records(domain)
     return JSONResponse({
@@ -200,22 +178,14 @@ async def check_domain_ns(request):
             "id": id,
             "name": domain.name
         },
-        "status":status
+        "status": status
     })
 
-@app.route("/domains/{id:int}/check/a", methods=["GET"])
-async def check_domain_a(request):
+@app.get("/domains/{id:int}/check/a", tags=["domains"])
+async def check_domain_a(id: int, user = Depends(get_current_user)):
     """
-    summary: Check the A records for this domain.
-    responses:
-      200:
-        description: Check triggered
-        examples:
-          {"status": "ok"}
+    Check the DNS A records for this domain.
     """
-    if not request.user.is_authenticated:
-        return UnauthenticatedResponse()
-    id = request.path_params['id']
     domain = await Domain.objects.get(id = id)
     status = await m.check_domain_a_records(domain)
     return JSONResponse({
@@ -223,22 +193,15 @@ async def check_domain_a(request):
             "id": id,
             "name": domain.name
         },
-        "status":status
+        "status": status
     })
 
-@app.route("/domains/{id:int}/check/gsv", methods=["GET"])
-async def check_domain_gsv(request):
+@app.get("/domains/{id:int}/check/gsv", tags=["domains"], summary="Check Domain Google Site Verification record")
+async def check_domain_gsv(id: int, user = Depends(get_current_user)):
     """
-    summary: Check the GSV TXT record for this domain.
-    responses:
-      200:
-        description: Check triggered
-        examples:
-          {"status": "ok"}
+    Check that the DNS TXT records for this domain contains the correct Google Site Verification token.
+    - **id**: domain id
     """
-    if not request.user.is_authenticated:
-        return UnauthenticatedResponse()
-    id = request.path_params['id']
     domain = await Domain.objects.get(id = id)
     status = await m.check_domain_google_site_verification(domain)
     return JSONResponse({
@@ -246,210 +209,216 @@ async def check_domain_gsv(request):
             "id": id,
             "name": domain.name
         },
-        "status":status
+        "status": status
     })
 
-@app.route("/dns_providers", methods=["GET"])
-async def list_dns_providers(request):
-    if not request.user.is_authenticated:
-        return UnauthenticatedResponse()
-    return JSONResponse({"dns_providers": [await dns_provider.serialize() for dns_provider in await DNSProvider.objects.all()]})
+@app.get("/domains/{id:int}/check/waf", tags=["domains"])
+async def check_domain_waf(id: int, user = Depends(get_current_user)):
+    """
+    Check the WAF setup for this domain.
+    """
+    domain = await Domain.objects.get(id = id)
+    status = await m.check_domain_waf(domain)
+    return JSONResponse({
+        "domain": {
+            "id": id,
+            "name": domain.name
+        },
+        "status": status
+    })
 
-@app.route("/dns_providers/{id:int}", methods=["GET"])
-async def get_dns_provider(request):
-    if not request.user.is_authenticated:
-        return UnauthenticatedResponse()
-    id = request.path_params['id']
+@app.get("/dns_providers", tags=["dns"])
+async def list_dns_providers(user = Depends(get_current_user)):
+    dns_providers = await DNSProvider.objects.all()
+    return JSONResponse({
+        "dns_providers": [await dns_provider.serialize() for dns_provider in dns_providers]
+    })
+
+@app.get("/dns_providers/{id:int}", tags=["dns"])
+async def get_dns_provider(id: int, user = Depends(get_current_user)):
     dns_provider = await DNSProvider.objects.get(id = id)
     return JSONResponse(await dns_provider.serialize(full = True))
 
-@app.route("/dns_providers/{id:int}/refresh", methods=["GET"])
-async def refresh_dns_provider(request):
+@app.get("/dns_providers/{id:int}/refresh", tags=["dns"])
+async def refresh_dns_provider(id: int, user = Depends(get_current_user)):
     """
-    summary: Trigger a refresh of the domain data hosted by this agent.
-    description: Used to force a fresh copy of the domains list to be fetched from the API.
-    responses:
-      200:
-        description:
-        examples:
-          {"status": "ok"}
+    Trigger a refresh of the domain data hosted by this agent. Used to force a fresh copy of the domains list to be fetched from the API.
     """
-    if not request.user.is_authenticated:
-        return UnauthenticatedResponse()
-    id = request.path_params['id']
     agent = m.dns_agents[id]
     status = await agent.refresh()
-    return JSONResponse({"status":status})
+    return JSONResponse({
+        "status": status
+    })
 
-@app.route("/dns_providers/{id:int}/domains/{domainname}/status", methods=["GET"])
-async def get_dns_provider_status_for_domain(request):
+@app.get("/dns_providers/{id:int}/domains/{domainname}/status", tags=["dns"])
+async def get_dns_provider_status_for_domain(id: int, domainname, user = Depends(get_current_user)):
     """
-    summary: Fetch the status of a domain from the nameservice provider.
-    description: Used to show the current status of the domain's name servers, including their main NS records.
-    responses:
-      200:
-        description:
-        examples:
-          {"status": {"summary":"OK", "nameservers": ["ns1", "ns2", "ns3"]}}
+    Fetch the status of a domain from the nameservice provider. Used to show the current status of the domain's name servers, including their main NS records.
     """
-    if not request.user.is_authenticated:
-        return UnauthenticatedResponse()
-    id = request.path_params['id']
-    domainname = request.path_params['domainname']
     agent = m.dns_agents[id]
-    status = await agent.get_status(domainname)
-    return JSONResponse({"status":status})
+    status = await agent.get_status_for_domain(domainname)
+    return JSONResponse({
+        "status": status
+    })
+
+@app.get("/registrars", tags=["registrars"])
+async def list_registrars(user = Depends(get_current_user)):
+    return JSONResponse({
+        "registrars": [await registrar.serialize() for registrar in await Registrar.objects.all()]
+    })
 
 
-@app.route("/registrars", methods=["GET"])
-async def list_registrars(request):
-    if not request.user.is_authenticated:
-        return UnauthenticatedResponse()
-    return JSONResponse({"registrars": [await registrar.serialize() for registrar in await Registrar.objects.all()]})
+@app.get("/registrars/{id:int}", tags=["registrars"])
+async def get_registrar(id: int, user = Depends(get_current_user)):
+    registrar = await Registrar.objects.get(id = id)
+    r = await registrar.serialize(full = True)
+    try:
+        agent = m.registrar_agents[id]
+        r['refresh_method'] = await agent.get_refresh_method()
+        status = await agent.get_status()
+        r['domain_count_total'] = status['domain_count_total']
+        r['domain_count_active'] = status['domain_count_active']
+    except NotImplementedError:
+        pass
+    except KeyError:
+        _logger.error(f"No registrar agent for id '{id}'")
+        pass
+    return JSONResponse(r)
 
-@app.route("/registrars/{id:int}/csvfile", methods=["POST"])
-async def update_registrar_by_csv_file(request):
+@app.post("/registrars/{id:int}/csvfile", tags=["registrars"])
+async def update_registrar_by_csv_file(id: int, csvfile: bytes = File(...), user = Depends(get_current_user)):
     """
-    summary: Upload fresh CSV file downloaded from registrar.
-    description: Intended for use with the Marcaria module.
-    responses:
-      201:
-        description: CSV file accepted.
-        examples:
-          {"status": "ok"}
+    Upload fresh CSV file downloaded from registrar. Intended for use with the Marcaria module and any other modules for registrars that allow a CSV file of their domains to be downloaded.
     """
-    if not request.user.is_authenticated:
-        return UnauthenticatedResponse()
-    id = request.path_params['id']
-    form = await request.form()
-
     agent = m.registrar_agents[id]
-    await agent.update_from_csvfile(form["csvfile"])
+    try:
+        res = await agent.update_from_csvfile(csvfile)
+        return JSONResponse({
+            "status":"ok",
+            "records_read": res['count']
+        }, status_code=201)
+    except Exception as e:
+        return JSONResponse({
+            "status":"error",
+            "error": e.__str__()
+        }, status_code=400)
 
-    return JSONResponse({"status":"ok"}, status_code=201)
-
-@app.route("/registrars/{id:int}/domains/{domainname}/status", methods=["GET"])
-async def get_registrar_status_for_domain(request):
+@app.post("/registrars/{id:int}/jsonfile", tags=["registrars"])
+async def update_registrar_by_json_file(id: int, jsonfile: bytes = File(...), user = Depends(get_current_user)):
     """
-    summary: Fetch the status of a domain from the registrar.
-    description: Used to show the current status and expiry date of a given domain with the registrar. This can fetch the data directly from the registrar's API, or use cached data from a recent CSV download, depending on the registrar's capabilities.
-    responses:
-      200:
-        description:
-        examples:
-          {"status": {"summary":"expired", "expiry_date": "2020-01-01"}}
+    Upload fresh JSON file downloaded from registrar. Intended for use with the IONOS module and any other modules for registrars that allow a JSON file of their domains to be downloaded.
     """
-    if not request.user.is_authenticated:
-        return UnauthenticatedResponse()
-    id = request.path_params['id']
-    domainname = request.path_params['domainname']
     agent = m.registrar_agents[id]
-    status = await agent.get_status(domainname)
-    return JSONResponse({"status":status})
+    try:
+        res = await agent.update_from_jsonfile(jsonfile)
+        return JSONResponse({
+            "status":"ok",
+            "records_read": res['count']
+        }, status_code=201)
+    except Exception as e:
+        return JSONResponse({
+            "status":"error",
+            "error": e.__str__()
+        }, status_code=400)
 
-@app.route("/hosting/{id:int}/refresh", methods=["GET"])
-async def refresh_hosting_provider(request):
+@app.get("/registrars/{id:int}/refresh", tags=["registrars"])
+async def refresh_registrar_provider(id: int, user = Depends(get_current_user)):
     """
-    summary: Fetch a fresh copy of the information about the sites hosted by this agent.
-    description: Used to force a fresh copy of the sites to be fetched from the API.
-    responses:
-      200:
-        description:
-        examples:
-          {"status": "ok"}
+    Fetch a fresh copy of the information about the registrar for this agent. Used to force a fresh copy of the details to be fetched from the API.
     """
-    if not request.user.is_authenticated:
-        return UnauthenticatedResponse()
-    id = request.path_params['id']
+    agent = m.registrar_agents[id]
+    try:
+        res = await agent.refresh()
+        return JSONResponse({
+            "status":"ok",
+            "records_read": res['count']
+        }, status_code=201)
+    except Exception as e:
+        return JSONResponse({
+            "status":"error",
+            "error": e.__str__()
+        }, status_code=400)
+
+@app.get("/registrars/{id:int}/domains/{domainname}/status", tags=["registrars"])
+async def get_registrar_status_for_domain(id: int, domainname, user = Depends(get_current_user)):
+    """
+    Fetch the status of a domain from the registrar. Used to show the current status and expiry date of a given domain with the registrar. This can fetch the data directly from the registrar's API, or use cached data from a recent CSV download, depending on the registrar's capabilities.
+    """
+    agent = m.registrar_agents[id]
+    status = await agent.get_status_for_domain(domainname)
+    return JSONResponse({
+        "status": status
+    })
+
+@app.get("/hosting/{id:int}/refresh", tags=["hosting"])
+async def refresh_hosting_provider(id: int, user = Depends(get_current_user)):
+    """
+    Fetch a fresh copy of the information about the sites hosted by this agent.
+    Used to force a fresh copy of the sites to be fetched from the API.
+    """
     agent = m.hosting_agents[id]
     status = await agent.refresh()
-    return JSONResponse({"status":status})
+    return JSONResponse({
+        "status": status
+    })
 
-@app.route("/waf/{id:int}/refresh", methods=["GET"])
-async def refresh_hosting_provider(request):
+@app.get("/waf/{id:int}/refresh", tags=["waf"])
+async def refresh_waf_provider(id: int, user = Depends(get_current_user)):
     """
-    summary: Fetch a fresh copy of the information about the WAF managed by this agent.
-    description: Used to force a fresh copy of the details to be fetched from the API.
-    responses:
-      200:
-        description:
-        examples:
-          {"status": "ok"}
+    Fetch a fresh copy of the information about the WAF managed by this agent. Used to force a fresh copy of the details to be fetched from the API.
     """
-    if not request.user.is_authenticated:
-        return UnauthenticatedResponse()
-    id = request.path_params['id']
     agent = m.waf_agents[id]
     status = await agent.refresh()
-    return JSONResponse({"status":status})
+    return JSONResponse({
+        "status": status
+    })
 
-@app.route("/registrar/{id:int}/refresh", methods=["GET"])
-async def refresh_hosting_provider(request):
+@app.get("/reconcile")
+async def reconcile(user = Depends(get_current_user)):
     """
-    summary: Fetch a fresh copy of the information about the registrar for this agent.
-    description: Used to force a fresh copy of the details to be fetched from the API.
-    responses:
-      200:
-        description:
-        examples:
-          {"status": "ok"}
+    Trigger a full reconciliation process. Status events will be logged to the standard log streams for now, but should eventually be routed to a log management system for indexing/searching/monitoring/alerting etc.
     """
-    if not request.user.is_authenticated:
-        return UnauthenticatedResponse()
-    id = request.path_params['id']
-    agent = m.registrar_agents[id]
-    status = await agent.refresh()
-    return JSONResponse({"status":status})
+    status = await m.reconcile()
+    return JSONResponse({
+        "status": status
+    })
 
-@app.route("/reconcile", methods=["GET"])
-async def reconcile(request):
-    """
-    summary: Trigger a full reconciliation process.
-    description: Reports OK, then runs in the background. Status events will be logged to the standard log streams for now, but should eventually be routed to a log management system for indexing/searching/monitoring/alerting etc.
-    responses:
-      200:
-        description: CSV file accepted.
-        examples:
-          {"status": "ok"}
-    """
-    if not request.user.is_authenticated:
-        return UnauthenticatedResponse()
-    await m.reconcile()
-    return JSONResponse({"status":"ok"})
-
-@app.route("/schema", methods=["GET"], include_in_schema=False)
-def openapi_schema(request):
-    return schemas.OpenAPIResponse(request=request)
 
 @app.on_event("startup")
 async def startup():
+    _logger.debug("Setting up signal handlers on main event loop...")
+    loop = asyncio.get_event_loop()
+    signals = (signal.SIGHUP, signal.SIGTERM, signal.SIGINT)
+    for s in signals:
+        loop.add_signal_handler(
+            s, lambda s=s: asyncio.create_task(shutdown(signal=s)))
+    loop.set_exception_handler(handle_exception)
+
     _logger.debug("Connecting to database...")
     await database.connect()
 
     _logger.debug("Instantiating manager...")
     global m
     m = manager.Manager()
-    #_logger.info("Adding test task to manager task queue...")
-    #await m.taskq.put({
-    #    "task": 1,
-    #    "notes": "Testing"
-    #})
-
-    _logger.info("Running manager...")
     await m.run()
 
 @app.on_event("shutdown")
-async def shutdown():
+async def shutdown(signal = None):
+    if signal:
+        _logger.info(f"Received signal: {signal}")
     _logger.info("Disconnecting from database...")
     await database.disconnect()
 
+    _logger.info("Stopping main loop...")
+    loop = asyncio.get_event_loop()
+    loop.close()
+
+def handle_exception(loop, context):
+    msg = context.get("exception", context["message"])
+    logging.error(f"Caught exception in main thread: {msg}")
 
 def main():
     uvicorn.run(app, host='0.0.0.0', port=8000)
 
 if __name__ == '__main__':
-    if sys.argv[-1] == "schema":
-        schema = schemas.get_schema(routes=app.routes)
-        print(yaml.dump(schema, default_flow_style=False))
-    else:
-        main()
+    main()

@@ -1,6 +1,8 @@
-FROM alpine
+FROM python:3.7-alpine3.10
 RUN apk -U add \
-    python3-dev libffi-dev openssl-dev build-base \
+    python3-dev build-base \
+    libffi-dev openssl-dev openldap-dev \
+    mariadb-dev \
     py3-pip \
     py3-sqlalchemy \
     py3-mysqlclient

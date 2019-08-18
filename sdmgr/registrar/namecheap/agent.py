@@ -51,6 +51,9 @@ class Namecheap(RegistrarAgent):
     def _get_url_prefix(self):
         return f"{self.api_url}/xml.response?ApiUser={self.api_user}&ApiKey={self.api_token}&UserName={api_user}&ClientIp={self.client_ip}"
 
+    async def get_refresh_method(self):
+        return "api"
+
     async def refresh(self):
         _logger.info(f"Refreshing list of domains managed on {self.label}...")
         domains = {}
@@ -84,15 +87,24 @@ class Namecheap(RegistrarAgent):
                 return
 
         self.domains = domains
-        _logger.info(f"Loaded {len(self.domains)} domains from Namecheap API.")
+
+        _logger.info(f"Updated Namecheap registrar with {len(self.domains)} domains from their API.")
+
+        # Record this in the 'state' field in the db
         await self._save_state()
 
+        # Ensure domain records are present for all domains listed in this file
         await self._populate_domains()
+
+        # Return count of domains for confirmation message
+        return {
+            "count": len(self.domains)
+        }
 
     async def get_registered_domains(self):
         return self.domains.keys()
 
-    async def get_status(self, domainname):
+    async def get_status_for_domain(self, domainname):
         if domainname not in self.domains:
             return {
                 'summary': f"No information for '{domainname}'"

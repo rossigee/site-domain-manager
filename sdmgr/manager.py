@@ -1,8 +1,8 @@
-#import threading
 import asyncio
+import aiodns
 import orm
-import dns.resolver
 import socket
+import signal
 
 import importlib
 
@@ -12,12 +12,21 @@ import logging
 _logger = logging.getLogger(__name__)
 
 
-def resolve(hostname):
-    return socket.gethostbyname(hostname)
+async def fetch_records_from_dns(domain, type):
+    resolver = aiodns.DNSResolver()
+    try:
+        rr = await resolver.query(domain, type)
+        return [x.host for x in rr]
+    except aiodns.error.DNSError as e:
+        _logger.error(f"DNS error looking up domain {domain}: {e.__str__()}")
+    except Exception as e:
+        _logger.exception(e)
+    return []
 
-def fetch_records_from_dns(domain, type):
-    entries = dns.resolver.query(domain, type)
-    return [x.to_text() for x in entries]
+def handle_exception(loop, context):
+    msg = context.get("exception", context["message"])
+    logging.error(f"Caught exceptionin monitoring thread: {msg}")
+
 
 class Manager:
     def __init__(self):
@@ -26,10 +35,7 @@ class Manager:
         self.hosting_agents = {}
         self.waf_agents = {}
 
-        self.taskq = asyncio.Queue()
-
         # TODO: Connect to Google to fetch/verify the GSV codes via API?
-
 
     async def __init_agents(self):
         try:
@@ -72,9 +78,9 @@ class Manager:
                 self.waf_agents[agent.id] = agent
 
             _logger.debug("Starting agents...")
-            # TODO: run simultaneously
             for coro in coros:
-                await coro
+                await asyncio.create_task(coro)
+            _logger.debug("Started agents.")
 
         except Exception as e:
             _logger.exception(e)
@@ -93,11 +99,11 @@ class Manager:
             _logger.info(f"Total hosted domains: {len(hosted_domains)}")
 
             # Get list of known domains (in our state db)...
-            domains = [x.name for x in await Domain.objects.filter(active=True).all()]
+            domains = [x.name for x in await Domain.objects.all()]
             _logger.info(f"Total known domains: {len(domains)}")
 
             # Get metrics for 'registered but not hosted' (i.e. holding domains)
-            domains_to_create = []
+            #domains_to_create = []
 
             # Get metrics for 'hosted but not registered' (i.e. expired/misconfig)
 
@@ -107,69 +113,71 @@ class Manager:
             _logger.exception(e)
 
 
+    async def check_all_active_domains(self):
+        _logger.info(f"Checking all active domains...")
+
+        try:
+            # Get list of known domains (in our state db)...
+            domains = await Domain.objects.filter(active=True).all()
+            _logger.info(f"Checking {len(domains)} active domains.")
+            for domain in domains:
+                asyncio.create_task(self.check_domain(domain))
+
+        except Exception as e:
+            _logger.exception(e)
+
+
     async def check_domain(self, domain):
-        await domain.load()
-        if domain.site is None:
-            raise Exception(f"No hosting configured for domain {domain.name}.")
-        #await domain.site.load()
-        if domain.waf is None:
-            raise Exception(f"No WAF configured for domain {domain.name}.")
-        #await domain.waf.load()
+        try:
+            await domain.load()
+            _logger.info(f"Checking domain '{domain.name}'...")
+            if domain.site is None:
+                raise Exception(f"No hosting configured for domain {domain.name}.")
+            #await domain.site.load()
+            if domain.waf is None:
+                raise Exception(f"No WAF configured for domain {domain.name}.")
+            #await domain.waf.load()
 
-        # Check the registrar and hosting are as expected
+            # Check the registrar and hosting are as expected
 
-            # Update if not
+                # Update if not
 
-            # Report that we had to update it
+                # Report that we had to update it
 
-        # Check the domain's NS records are under our control
-        await self.check_domain_ns_records(domain)
+            # Check the domain's NS records are under our control
+            asyncio.create_task(self.check_domain_ns_records(domain))
 
-        # Check the site hosting details for the domain
-        await self.check_domain_a_records(domain)
+            # Check the site hosting details for the domain
+            asyncio.create_task(self.check_domain_a_records(domain))
 
-        # Check the site hosting details for the domain
-        await self.check_site_ssl_certs(domain.site)
+            # Check the WAF details
+            #await self.check_domain_waf(domain)
 
-        # Obtain the IP(s) the WAF should be pointing from site hosting
-        _logger.debug(f"Looking up IPs for '{domain.site.label}' site...")
-        hosting_ips = await self.fetch_ips_for_site(domain)
-        _logger.info(f"Found IPs for '{domain.site.label}': {hosting_ips}")
+            # Check the site hosting details for the domain
+            #await self.check_site_ssl_certs(domain.site)
 
-        # Obtain the hostnames the WAF *is* listening/filtering/proxying
-        # HTTP requests for
-        _logger.debug(f"Looking up current aliases for '{domain.site.label}' site...")
-        current_aliases = await self.fetch_aliases_for_site(domain.site)
-        _logger.info(f"Found {len(current_aliases)} current aliases for '{domain.site.label}'.")
+            # Check that the Google Site Verification code is in place
+            #await self.check_domain_google_site_verification(domain)
 
-        # Obtain the hostnames the WAF should be listening/filtering/proxying
-        # HTTP requests for
-        _logger.debug(f"Looking up expected aliases for '{domain.site.label}' site...")
-        expected_aliases = await self.gather_aliases_for_site(domain.site)
-        _logger.info(f"Found {len(expected_aliases)} expected aliases for '{domain.site.label}'.")
+            return "OK"
+        except Exception as e:
+            _logger.exception(e)
 
-        # Update hosting config if lists differ
-        if len(current_aliases) != len(expected_aliases):
-            await self.update_aliases_for_site(domain.site, expected_aliases)
-
-        # Check the WAF provider has correct details for the domain
-        await self.check_waf_provider_aliases(domain, expected_aliases, hosting_ips)
-
-        # Check that the Google Site Verification code is in place
-        await self.check_domain_google_site_verification(domain)
-
-        return "OK"
 
     async def check_domain_ns_records(self, domain):
         if domain.dns is None:
-            _logger.warning(f"No DNS configured for domain '{domain.name}'")
+            _logger.warning(f"No DNS configured for domain '{domain.name}'.")
+            return f"No DNS configured for domain '{domain.name}'."
 
         try:
             agent = self.dns_agents[domain.dns.id]
-            _logger.info(f"Checking DNS NS records for {domain.name} with {agent.label}...")
+            _logger.debug(f"Checking DNS NS records for {domain.name} with {agent.label}...")
         except KeyError:
             _logger.warning(f"No DNS provider assigned for '{domain.name}'.")
-            return "No DNS provider assigned to the domain."
+            return f"No DNS provider assigned for '{domain.name}'."
+
+        def resolve(hostname):
+            return socket.gethostbyname(hostname)
 
         # Create domain via DNS provider if necessary
         try:
@@ -177,7 +185,7 @@ class Manager:
             if len(r53_ns) < 4:
                 _logger.warning("Unexpected number of NS entries.")
             if len(r53_ns) < 1:
-                _logger.warning(f"Creating missing DNS zone for '{domain.name}' with {agent.label}...")
+                _logger.notice(f"Creating missing DNS zone for '{domain.name}' with {agent.label}...")
                 await agent.create_domain(domain.name)
                 r53_ns = await agent.get_ns_records(domain.name)
             r53_ns_resolved = [resolve(x) for x in r53_ns]
@@ -189,23 +197,16 @@ class Manager:
         # What do public nameservers tell us?
         dns_ns = []
         dns_ns_resolved = []
-        try:
-            dns_ns = fetch_records_from_dns(domain.name, 'NS')
-            dns_ns_resolved = [resolve(x) for x in dns_ns]
+        dns_ns = await fetch_records_from_dns(domain.name, 'NS')
+        dns_ns_resolved = [resolve(x) for x in dns_ns]
 
-            # If they match, job done.
-            if len(dns_ns) > 0 and set(r53_ns_resolved) == set(dns_ns_resolved):
-                _logger.info(f"DNS NS records for {domain.name} with {agent.label} as expected.")
-                return "OK"
+        # If they match, job done.
+        if len(dns_ns) > 0 and set(r53_ns_resolved) == set(dns_ns_resolved):
+            _logger.info(f"DNS NS records for {domain.name} with {agent.label} as expected.")
+            return "OK"
 
-            # Otherwise, something needs to be done about it
-            _logger.warning(f"NS records for '{domain.name}' not configured correctly.")
-
-        except dns.resolver.NoAnswer:
-            _logger.warning(f"No response for NS record lookup for '{domain.name}'.")
-
-        except dns.resolver.NoNameservers:
-            _logger.warning(f"Could not find NS records for '{domain.name}'.")
+        # Otherwise, something needs to be done about it
+        _logger.warning(f"NS records for '{domain.name}' not configured correctly.")
 
         # Ensure NS records are set with registrar
         registrar_agent = self.registrar_agents[domain.registrar.id]
@@ -214,60 +215,59 @@ class Manager:
         return f"Request to update NS records sent via {registrar_agent.label}."
 
     async def check_domain_a_records(self, domain):
-        if domain.dns is None:
-            _logger.warning(f"No DNS configured for domain '{domain.name}'")
-
         try:
-            agent = self.dns_agents[domain.dns.id]
-            _logger.info(f"Checking DNS NS records for {domain.name} with {agent.label}...")
-        except KeyError:
-            _logger.warning(f"No DNS provider assigned for '{domain.name}'.")
-            return "No DNS provider assigned to the domain."
+            if domain.dns is None:
+                _logger.error(f"No DNS configured for domain '{domain.name}'.")
+                return f"No DNS configured for domain '{domain.name}'."
 
-        await domain.site.load()
-        hosting_ips = await self.fetch_hosting_ips_for_domain(domain)
-
-        def dns_a_record_already_set(a_record):
             try:
-                dns_a = fetch_records_from_dns(a_record, 'A')
+                agent = self.dns_agents[domain.dns.id]
+                _logger.debug(f"Checking DNS A records for {domain.name} with {agent.label}...")
+            except KeyError:
+                _logger.error(f"No DNS provider assigned for '{domain.name}'.")
+                return f"No DNS provider assigned for '{domain.name}'."
+
+            hosting_ips = await self.fetch_hosting_ips_for_domain(domain)
+            if len(hosting_ips) < 1:
+                _logger.info(f"No hosting IPs to set for '{domain.name}'.")
+                return f"No hosting IPs to set for '{domain.name}'."
+
+            async def dns_a_record_already_set(a_record):
+                dns_a = await fetch_records_from_dns(a_record, 'A')
                 return len(dns_a) > 0 and set(dns_a) == set(hosting_ips)
-            except dns.resolver.NXDOMAIN:
-                _logger.warning(f"Non-existent domain response for lookup for '{domain.name}'.")
-            except dns.resolver.NoAnswer:
-                _logger.warning(f"No response for apex A record lookup for '{domain.name}'.")
-            except dns.resolver.NoNameservers:
-                _logger.warning(f"Could not find apex A records for '{domain.name}'.")
-            return False
 
-        changes_made = False
+            changes_made = False
 
-        # Check/manage apex record
-        if domain.update_apex:
-            a_record = domain.name
-            if dns_a_record_already_set(a_record):
-                _logger.info(f"DNS apex record for {a_record} with {agent.label} as expected.")
-            else:
-                await agent.create_new_a_rr(domain.name, a_record, hosting_ips)
-                _logger.info(f"DNS apex record for {a_record} updated to {hosting_ips}.")
-                changes_made = True
-
-        # Check/manage additional 'A' records as specified (typically 'www')
-        if len(domain.update_a_records) > 0:
-            for prefix in domain.update_a_records.split(","):
-                a_record = f"{prefix}.{domain.name}"
-                if dns_a_record_already_set(a_record):
-                    _logger.info(f"DNS A record for {a_record} with {agent.label} as expected.")
+            # Check/manage apex record
+            if domain.update_apex:
+                a_record = domain.name
+                if await dns_a_record_already_set(a_record):
+                    _logger.info(f"DNS apex record for {a_record} with {agent.label} as expected.")
                 else:
                     await agent.create_new_a_rr(domain.name, a_record, hosting_ips)
-                    _logger.info(f"DNS A record for {a_record} updated to {hosting_ips}.")
+                    _logger.info(f"DNS apex record for {a_record} updated to {hosting_ips}.")
                     changes_made = True
 
-        return "OK" if not changes_made else "DNS updates applied."
+            # Check/manage additional 'A' records as specified (typically 'www')
+            if len(domain.update_a_records) > 0:
+                for prefix in domain.update_a_records.split(","):
+                    a_record = f"{prefix}.{domain.name}"
+                    if await dns_a_record_already_set(a_record):
+                        _logger.info(f"DNS A record for {a_record} with {agent.label} as expected.")
+                    else:
+                        await agent.create_new_a_rr(domain.name, a_record, hosting_ips)
+                        _logger.info(f"DNS A record for {a_record} updated to {hosting_ips}.")
+                        changes_made = True
+
+            return "OK" if not changes_made else "DNS updates applied."
+        except Exception as e:
+            _logger.exception(e)
 
     async def check_waf_provider_aliases(self, domain, expected_aliases, hosting_ips):
         _logger.info(f"Checking WAF aliases for site {domain.site.label}...")
         waf_agent = self.waf_agents[domain.waf.id]
-        await waf_agent.apply_configuration(domain.site.label, domain.name, expected_aliases, hosting_ips)
+        status = await waf_agent.apply_configuration(domain.site.label, domain.name, expected_aliases, hosting_ips)
+        return status
 
     async def check_domain_google_site_verification(self, domain):
         if domain.google_site_verification is not None:
@@ -280,6 +280,38 @@ class Manager:
         agent = self.registrar_agents[domain.registrar.id]
         details = await agent.get_contacts(domain)
         print(details)
+
+    async def check_domain_waf(self, domain):
+        _logger.debug(f"Checking domain WAF for {domain.name}...")
+        waf = self.waf_agents[domain.waf.id]
+
+        # Obtain the IP(s) the WAF should be pointing from site hosting
+        site = await Site.objects.get(id = domain.site.id)
+        hosting_agent = self.hosting_agents[site.hosting.id]
+        _logger.debug(f"Looking up IPs for '{site.label}' site from host '{hosting_agent.label}'...")
+        hosting_ips = await hosting_agent.fetch_ips_for_site(site)
+        _logger.info(f"Found IPs for '{site.label}': {hosting_ips}")
+
+        # Obtain the hostnames the WAF *is* listening/filtering/proxying
+        # HTTP requests for
+        _logger.debug(f"Looking up current aliases for '{site.label}' site...")
+        current_aliases = await self.get_current_aliases_for_site(site)
+        _logger.info(f"Found {len(current_aliases)} current aliases for '{site.label}'.")
+
+        # Obtain the hostnames the WAF should be listening/filtering/proxying
+        # HTTP requests for
+        _logger.debug(f"Looking up expected aliases for '{site.label}' site...")
+        expected_aliases = await self.get_expected_aliases_for_site(site)
+        _logger.info(f"Found {len(expected_aliases)} expected aliases for '{site.label}'.")
+
+        # Update hosting config if lists differ
+        if len(current_aliases) != len(expected_aliases):
+            await self.update_aliases_for_site(site, expected_aliases)
+
+        # Check the WAF provider has correct details for the domain
+        _logger.info(f"Checking WAF aliases for site {site.label}...")
+        status = await waf.apply_configuration(site.label, domain.name, expected_aliases, hosting_ips)
+        return status
 
     async def check_site_ssl_certs(self, site):
         if not site.active:
@@ -336,7 +368,7 @@ class Manager:
             hosted_domains += await agent.get_hosted_domains()
         return hosted_domains
 
-    async def gather_aliases_for_site(self, site):
+    async def get_expected_aliases_for_site(self, site):
         aliases = []
         domainlist = await Domain.objects.filter(site = site, active=True).all()
         for d in domainlist:
@@ -350,14 +382,16 @@ class Manager:
         return aliases
 
     async def fetch_hosting_ips_for_domain(self, domain):
-        if domain.waf is not None:
+        if domain.site.id is None:
+            return []
+        if domain.waf.id is not None:
             waf_agent = self.waf_agents[domain.waf.id]
             return await waf_agent.fetch_ips_for_site(domain.site)
         else:
-            hosting_agent = self.hosting_agents[site.hosting.id]
+            hosting_agent = self.hosting_agents[domain.site.hosting.id]
             return await hosting_agent.fetch_ips_for_site(domain.site)
 
-    async def fetch_aliases_for_site(self, site):
+    async def get_current_aliases_for_site(self, site):
         hosting_agent = self.hosting_agents[site.hosting.id]
         return await hosting_agent.fetch_aliases_for_site(site)
 
@@ -368,3 +402,16 @@ class Manager:
     async def run(self):
         # Create an instance for each agent
         await self.__init_agents()
+
+        # Prepare the main manager loop
+        async def monitoring_loop():
+            _logger.info("Starting monitoring event loop.")
+            try:
+                while True:
+                    asyncio.create_task(self.check_all_active_domains())
+                    await asyncio.sleep(600)
+            except Exception as e:
+                _logger.exception(e)
+
+        asyncio.create_task(monitoring_loop())
+        _logger.debug("Running monitoring event loop...")

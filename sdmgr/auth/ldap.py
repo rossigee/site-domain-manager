@@ -1,0 +1,41 @@
+from fastapi import HTTPException
+
+import ldap, os
+
+async def auth(username, password):
+    ldap_url = os.environ.get("LDAP_URL")
+    connect = ldap.initialize(ldap_url)
+    connect.set_option(ldap.OPT_REFERRALS, 0)
+
+    # Bind as search user (find DN to auth user with)
+    bind_dn = os.environ.get("LDAP_BIND_DN")
+    bind_pw = os.environ.get("LDAP_BIND_PW")
+    base_dn = os.environ.get("LDAP_SEARCH_DN")
+    user_search_filter = os.environ.get("LDAP_FILTER") % { 'username': username }
+    try:
+        connect.simple_bind_s(bind_dn, bind_pw)
+    except ldap.LDAPError as e:
+        raise HTTPException(status_code=400, detail=f"LDAP bind error: {str(e)}")
+
+    try:
+        results = connect.search_s(base_dn, ldap.SCOPE_SUBTREE, user_search_filter, ['objectclass'], 1)
+        if len(results) != 1:
+            raise HTTPException(status_code=400, detail=f"LDAP user search error: {len(results)} users found.")
+
+        user_entry = results[0]
+        ldap_dn = user_entry[0]
+        if ldap_dn == None:
+            raise HTTPException(status_code=400, detail=f"LDAP user search error: Matched object has no DN.")
+
+        # TODO: Check group membership (here or below?)
+    except ldap.LDAPError as e:
+        raise HTTPException(status_code=400, detail=f"LDAP user search error: {str(e)}")
+
+    # Bind as user (check authentication)
+    try:
+        connect.simple_bind_s(ldap_dn, password)
+    except ldap.LDAPError as e:
+        raise HTTPException(status_code=400, detail=f"LDAP bind error: {str(e)}")
+
+    # Tidy up
+    connect.unbind_s()

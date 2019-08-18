@@ -32,7 +32,7 @@ class DNSProviderAgent():
     async def get_hosted_domains(self):
         raise NotImplementedError
 
-    async def get_status(self, domainname):
+    async def get_status_for_domain(self, domainname):
         raise NotImplementedError
 
     async def _populate_domains(self):

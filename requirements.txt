@@ -1,13 +1,16 @@
 gunicorn
 uvicorn
 starlette
+fastapi
+pyjwt
 databases
 orm
 boto3
-dnspython
 kubernetes
 aiohttp
 aiomysql
 aiosqlite
+aiodns
 python-multipart
+python-ldap
 mysqlclient

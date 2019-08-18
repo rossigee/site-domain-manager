@@ -27,6 +27,16 @@ spec:
       - env:
         - name: DATABASE_URL
           value: mysql+mysqldb://sdmgr:sdmgr@db/sdmgr
+        - name: LDAP_BIND_DN
+          value: CN=Your Authentication User,CN=Users,DC=yourdomain,DC=com
+        - name: LDAP_BIND_PW
+          value: blahblahblah
+        - name: LDAP_FILTER
+          value: (sAMAccountName=%(username)s)
+        - name: LDAP_SEARCH_DN
+          value: CN=Users,DC=yourdomain,DC=com
+        - name: LDAP_URL
+          value: ldaps://yourldapserver:636
         - name: CLOUDWAYS_API_EMAIL
           valueFrom:
             configMapKeyRef:
@@ -123,6 +133,7 @@ metadata:
     nginx.ingress.kubernetes.io/cors-allow-methods: "PUT, GET, POST, OPTIONS, PATCH, DELETE"
     nginx.ingress.kubernetes.io/cors-allow-origin: "http://localhost:4200/"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
 spec:
   rules:
   - host: sdmgr.local
@@ -131,7 +142,7 @@ spec:
       - backend:
           serviceName: app
           servicePort: 8000
-        path: /
+        path: /api/v1(/|$)(.*)
   tls:
   - hosts:
     - sdmgr.local

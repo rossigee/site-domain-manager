@@ -137,7 +137,7 @@ class K8S(WAFProviderAgent):
 
         return "OK"
 
-    async def apply_configuration(self, sitename, hostname, aliases, ip_addrs, certdata):
+    async def apply_configuration(self, sitename, hostname, aliases, ip_addrs):
         daemonset = None
 
         # Generate a siteid that isn't a domain name (for clarity)

@@ -2,6 +2,8 @@ import databases
 import orm
 import sqlalchemy
 
+from fastapi.encoders import jsonable_encoder
+
 from sdmgr import settings
 
 database = databases.Database(settings.DATABASE_URL)
@@ -20,7 +22,7 @@ class Hosting(orm.Model):
     state = orm.Text(default="{}")
     active = orm.Boolean(default=True)
 
-    async def serialize(self):
+    async def serialize(self, full = False):
         await self.load()
         return {
             "id": self.id,
@@ -38,13 +40,15 @@ class Site(orm.Model):
     hosting = orm.ForeignKey(Hosting)
     active = orm.Boolean(default=True)
 
-    async def serialize(self):
+    async def serialize(self, full = False):
         await self.load()
-        return {
+        r = {
             "id": self.id,
-            "label": self.label
+            "label": self.label,
+            "hosting": await self.hosting.serialize(),
+            "active": self.active
         }
-
+        return r
 
 class Registrar(orm.Model):
     __tablename__ = "registrars"
@@ -57,13 +61,16 @@ class Registrar(orm.Model):
     config_id = orm.String(max_length=100, allow_null=True)
     state = orm.Text(default="{}")
     active = orm.Boolean(default=True)
+    updated_time = orm.DateTime()
 
-    async def serialize(self):
+    async def serialize(self, full = False):
         await self.load()
-        return {
+        r = {
             "id": self.id,
-            "label": self.label
+            "label": self.label,
+            "updated_time": jsonable_encoder(self.updated_time)
         }
+        return r
 
 
 class DNSProvider(orm.Model):
@@ -102,7 +109,7 @@ class WAFProvider(orm.Model):
     state = orm.Text(default="{}")
     active = orm.Boolean(default=True)
 
-    async def serialize(self):
+    async def serialize(self, full = False):
         await self.load()
         return {
             "id": self.id,
@@ -127,8 +134,7 @@ class Domain(orm.Model):
     state = orm.Text(default="{}")
     active = orm.Boolean(default=True)
 
-    async def serialize(self):
-        #await self.load()
+    async def serialize(self, full = False):
         r = {
             "id": self.id,
             "name": self.name,
