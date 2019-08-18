@@ -53,18 +53,23 @@ class RegistrarAgent():
         raise NotImplementedError
 
     async def _populate_domains(self):
-        registrar = await Registrar.objects.get(id = self.id)
-        for domainname in await self.get_registered_domains():
-            _logger.debug(f"Checking {domainname}...")
-            try:
-                domain = await Domain.objects.get(name=domainname)
-                _logger.debug(f"Found {domainname}.")
-            except orm.exceptions.NoMatch:
-                domain = await Domain.objects.create(
-                    name = domainname,
-                    registrar = registrar,
-                )
-                _logger.debug(f"Created {domainname}.")
+        try:
+            registrar = await Registrar.objects.get(id = self.id)
+            domainnames = await self.get_registered_domains()
+            _logger.info(f"Checking for new domains in {len(domainnames)} domains from recent update...")
+            for domainname in domainnames:
+                _logger.debug(f"Checking {domainname}...")
+                try:
+                    domain = await Domain.objects.get(name=domainname)
+                    _logger.debug(f"Found {domainname}.")
+                except orm.exceptions.NoMatch:
+                    domain = await Domain.objects.create(
+                        name = domainname,
+                        registrar = registrar,
+                    )
+                    _logger.info(f"Created domain '{domainname}' from registrar '{registrar.label}'.")
+        except Exception as e:
+            _logger.exception(e)
 
     async def set_ns_records(self, domain, nameservers):
         # TODO: Abstract notification service away at some point. For now,
