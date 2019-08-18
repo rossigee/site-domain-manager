@@ -93,6 +93,6 @@ class IONOS(RegistrarAgent):
         domains = []
         for domainname in self.domains.keys():
             domain = self.domains[domainname]
-            if domain['status'] == "Registered":
+            if domain['status'] == "ACTIVE":
                 domains.append(domainname)
         return domains
