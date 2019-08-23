@@ -157,7 +157,7 @@ class K8S(WAFProviderAgent):
 
         try:
             for d in self.daemonsets:
-                if d.metadata.name == siteid:
+                if d['metadata']['name'] == siteid:
                     daemonset = d
                     break
 
