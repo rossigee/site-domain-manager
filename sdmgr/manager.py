@@ -269,12 +269,6 @@ class Manager:
         except Exception as e:
             _logger.exception(e)
 
-    async def check_waf_provider_aliases(self, domain, expected_aliases, hosting_ips):
-        _logger.info(f"Checking WAF aliases for site {domain.site.label}...")
-        waf_agent = self.waf_agents[domain.waf.id]
-        status = await waf_agent.apply_configuration(domain.site.label, domain.name, expected_aliases, hosting_ips)
-        return status
-
     async def check_domain_google_site_verification(self, domain):
         if domain.google_site_verification is not None:
             _logger.debug(f"Checking Google Site Verification code for {domain.name}...")
