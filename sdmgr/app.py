@@ -181,6 +181,17 @@ async def check_domain_ns(id: int, user = Depends(get_current_user)):
         "status": status
     })
 
+@app.get("/domains/{id:int}/lookup/ns", tags=["domains"])
+async def lookup_domain_ns(id: int, user = Depends(get_current_user)):
+    """
+    Return the results on an NS lookup to obtain the nameservers in use by the global DNS system. This allows the caller to compare Used to compare with the current status as of the domain's name servers, including their main NS records.
+    """
+    agent = m.dns_agents[id]
+    status = await agent.get_status_for_domain(domainname)
+    return JSONResponse({
+        "status": status
+    })
+
 @app.get("/domains/{id:int}/check/a", tags=["domains"])
 async def check_domain_a(id: int, user = Depends(get_current_user)):
     """
