@@ -29,14 +29,9 @@ app = FastAPI(
 )
 
 # Set up CORS
-origins = [
-    "https://sdmgr.agentdesign.co.uk",
-    "https://sdmgr.local",
-    "http://localhost:4200",
-]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], #origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
