@@ -412,12 +412,17 @@ async def startup():
 async def shutdown(signal = None):
     if signal:
         _logger.info(f"Received signal: {signal}")
+
     _logger.info("Disconnecting from database...")
     await database.disconnect()
 
     _logger.info("Stopping main loop...")
     loop = asyncio.get_event_loop()
-    loop.close()
+    loop.stop()
+
+    _logger.info("Cancelling remaining tasks...")
+    for task in asyncio.Task.all_tasks():
+        task.cancel()
 
 def handle_exception(loop, context):
     msg = context.get("exception", context["message"])
