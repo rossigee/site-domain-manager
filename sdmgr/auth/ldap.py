@@ -5,7 +5,7 @@ import json
 
 async def auth(username, password):
     authconfig_filename = os.getenv("AUTH_CONFIG")
-    authconfig = json.load(authconfig_filename)
+    authconfig = json.load(open(authconfig_filename, "r"))
 
     ldap_url = authconfig['ldap_url']
     connect = ldap.initialize(ldap_url)
