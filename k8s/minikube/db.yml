@@ -1,39 +1,40 @@
 ---
-apiVersion: extensions/v1beta1
-kind: Deployment
+apiVersion: apps/v1
+kind: StatefulSet
 metadata:
   labels:
-    workload: db
+    app: db
   name: db
   namespace: default
 spec:
-  progressDeadlineSeconds: 600
+  serviceName: "db"
   replicas: 1
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      workload: db
-  strategy:
-    rollingUpdate:
-      maxSurge: 25%
-      maxUnavailable: 25%
-    type: RollingUpdate
+      app: db
   template:
     metadata:
       labels:
-        workload: db
+        app: db
     spec:
       automountServiceAccountToken: false
       containers:
       - env:
         - name: MYSQL_ROOT_PASSWORD
           value: 9AFSpG0Gp/S816njABoY
+        - name: MYSQL_DATABASE
+          value: sdmgr
+        - name: MYSQL_USER
+          value: sdmgr
+        - name: MYSQL_PASSWORD
+          value: sdmgr
         image: mariadb
         imagePullPolicy: Always
         name: db
         ports:
         - containerPort: 3306
-          name: 3306tcp33062
+          name: mysql
           protocol: TCP
         resources: {}
         securityContext:
@@ -72,7 +73,7 @@ spec:
     protocol: TCP
     targetPort: 3306
   selector:
-    workload: db
+    app: db
   sessionAffinity: None
   type: ClusterIP
 ---
@@ -88,6 +89,6 @@ spec:
     protocol: TCP
     targetPort: 3306
   selector:
-    workload: db
+    app: db
   sessionAffinity: None
   type: NodePort

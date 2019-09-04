@@ -1,6 +1,6 @@
 from fastapi import Depends, FastAPI, File, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 from starlette.middleware.cors import CORSMiddleware
 
 import uvicorn
@@ -14,6 +14,7 @@ import sys
 import datetime
 import signal
 import asyncio
+import importlib
 
 import logging
 _logger = logging.getLogger(__name__)
@@ -39,10 +40,11 @@ app.add_middleware(
 
 @app.post("/token", tags=["auth"], include_in_schema=False)
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    if "pytest" in sys.modules:
-        from sdmgr.auth.test import auth
-    else:
-        from sdmgr.auth.ldap import auth
+    def import_auth_module(module_name):
+        auth_module = importlib.import_module(module_name)
+        return getattr(auth_module, "auth")
+
+    auth = import_auth_module(os.getenv("AUTH_MODULE", "sdmgr.auth.test"))
     await auth(form_data.username, form_data.password)
 
     _logger.info(f"Providing access token for {form_data.username}.")
@@ -125,14 +127,57 @@ async def get_domain(id: int, user = Depends(get_current_user)):
         "domain": await domain.serialize()
     })
 
-@app.post("/domains", tags=["domains"])
-async def add_domain(domain, user = Depends(get_current_user)):
-    _logger.info(f"User '{user.username}' adding new domain '{domain.name}'.")
-    await Domain.objects.create(domain)
-    return JSONResponse(await domain.serialize())
+@app.get("/domains/{id:int}/checks", tags=["domains"])
+async def get_domain_checks(id: int, user = Depends(get_current_user)):
+    """
+    Fetch latest checks for domain.
+    """
+    domain = await Domain.objects.get(id=id)
+    _logger.info(f"User '{user.username}' fetching domain checks for '{domain.name}'.")
+    # A '__startswith' filter would be better...
+    checks = StatusCheck.objects.filter(_check_id__contains=f"Domain:{domain.name}:")
+    return JSONResponse({
+        "checks": [await check.serialize() for check in await checks.all()]
+    })
+
+@app.get("/domains/{id:int}/check", tags=["domains"])
+async def check_domain(id: int, user = Depends(get_current_user)):
+    """
+    Restart checks for domain.
+    """
+    domain = await Domain.objects.get(id=id)
+    _logger.info(f"User '{user.username}' restarting domain checks for '{domain.name}'.")
+    await m.check_domain(domain)
+    checks = StatusCheck.objects.filter(_cls_type="domain",_cls_id=id)
+    return JSONResponse({
+        "checks": [await check.serialize() for check in await checks.all()]
+    })
+
+@app.get("/domains/{id:int}/apply", tags=["domains"])
+async def apply_domain(id: int, user = Depends(get_current_user)):
+    """
+    Apply necessary changes for domain.
+    """
+    domain = await Domain.objects.get(id=id)
+    _logger.info(f"User '{user.username}' applying domain configuration for '{domain.name}'.")
+    await m.apply_domain(domain)
+    checks = StatusCheck.objects.filter(_cls_type="domain",_cls_id=id)
+    return JSONResponse({
+        "checks": [await check.serialize() for check in await checks.all()]
+    })
+
+# NOTE: New domains should be created by importing fresh data to a registrar agent
+#@app.post("/domains", tags=["domains"])
+#async def add_domain(domain, user = Depends(get_current_user)):
+#    _logger.info(f"User '{user.username}' adding new domain '{domain.name}'.")
+#    await Domain.objects.create(domain)
+#    return JSONResponse(await domain.serialize())
 
 @app.put("/domains/{id:int}", tags=["domains"])
 async def update_domain(id: int, domain, user = Depends(get_current_user)):
+    """
+    Update editable attributes of a domain.
+    """
     _logger.info(f"User '{user.username}' updating domain '{domain.name}'.")
     domain = await Domain.objects.get(id = id)
 
@@ -389,6 +434,43 @@ async def reconcile(user = Depends(get_current_user)):
         "status": status
     })
 
+@app.get("/metrics")
+async def metrics():
+    """
+    Present statistics metrics to Prometheus for gathering/reporting.
+    """
+    metrics = await m.metrics()
+    output = ""
+
+    def format_metric_header(id, description, type):
+        text = f"# HELP sdmgr_{id} {description}\n"
+        text += f"# TYPE sdmgr_{id} {type}\n"
+        return text
+
+    def format_metric(id, description, type, val):
+        text = format_metric_header(id, description, type)
+        text += f"sdmgr_{id} {val}\n\n"
+        return text
+
+    for id in metrics:
+        val = metrics[id]
+
+        if id == "total_domains":
+            output += format_metric(id, "Count of domains in state database", "gauge", val)
+        elif id == "registrar_registered_domains":
+            output += format_metric(id, "Count of domains successfully registered with registrars", "gauge", val)
+        elif id == "dns_hosted_domains":
+            output += format_metric(id, "Count of domains successfully hosted by DNS providers", "gauge", val)
+
+        elif id == "agent_counts":
+            output += format_metric_header(id, f"Number of active service provider agents", "gauge")
+            for type in val:
+                fullid = f"sdmgr_agent_count" + '{"' + type + '"}'
+                output += f"{fullid} {val[type]}\n"
+            output += "\n"
+
+    return Response(content=output, media_type="text/plain")
+
 
 @app.on_event("startup")
 async def startup():
@@ -416,19 +498,26 @@ async def shutdown(signal = None):
     _logger.info("Disconnecting from database...")
     await database.disconnect()
 
-    _logger.info("Stopping main loop...")
-    loop = asyncio.get_event_loop()
-    loop.stop()
-
     _logger.info("Cancelling remaining tasks...")
     for task in asyncio.Task.all_tasks():
         task.cancel()
 
+    _logger.info("Stopping main loop...")
+    loop = asyncio.get_event_loop()
+    loop.stop()
+
+    _logger.debug("Removing signal handlers on main event loop...")
+    signals = (signal.SIGHUP, signal.SIGTERM, signal.SIGINT)
+    for s in signals:
+        loop.remove_signal_handler(s)
+
 def handle_exception(loop, context):
     msg = context.get("exception", context["message"])
     logging.error(f"Caught exception in main thread: {msg}")
+    print(context)
 
 def main():
+    # TODO: Arguments to change host/post?
     uvicorn.run(app, host='0.0.0.0', port=8000)
 
 if __name__ == '__main__':

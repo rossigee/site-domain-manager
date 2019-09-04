@@ -1,0 +1,30 @@
+{
+  "domainList" : [ {
+    "name" : "ionos1.test",
+    "iDN" : "ionos1.test",
+    "tld" : "test",
+    "type" : "ON_DOMAIN",
+    "contract" : "45137596",
+    "stateGroup" : "CHECK",
+    "state" : "ACTIVE",
+    "expirationDate" : "2020-12-07T23:00:00.000Z",
+    "transferLock" : "N/A",
+    "privacy" : "false",
+    "destination" : "WEBSPACE",
+    "target" : "/."
+  }, {
+  "domainList" : [ {
+    "name" : "ionos2.test",
+    "iDN" : "ionos2.test",
+    "tld" : "test",
+    "type" : "ON_DOMAIN",
+    "contract" : "45137596",
+    "stateGroup" : "CHECK",
+    "state" : "ACTIVE",
+    "expirationDate" : "2020-12-07T23:00:00.000Z",
+    "transferLock" : "N/A",
+    "privacy" : "false",
+    "destination" : "WEBSPACE",
+    "target" : "/."
+  } ]
+}

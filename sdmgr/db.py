@@ -10,6 +10,54 @@ database = databases.Database(settings.DATABASE_URL)
 metadata = sqlalchemy.MetaData()
 
 
+class Setting(orm.Model):
+    __tablename__ = "setting"
+    __database__ = database
+    __metadata__ = metadata
+
+    _id = orm.Integer(primary_key=True)
+    _cls_type = orm.String(max_length=100)
+    _cls_id = orm.Integer()
+    s_key = orm.String(max_length=100)
+    s_value = orm.Text(default="")
+
+
+class StatusCheck(orm.Model):
+    __tablename__ = "statuscheck"
+    __database__ = database
+    __metadata__ = metadata
+
+    _check_id = orm.String(max_length=100, unique=True)
+    startTime = orm.DateTime()
+    endTime = orm.DateTime(allow_null=True)
+    success = orm.Boolean(default=False)
+    output = orm.Text(allow_null=True)
+
+    async def serialize(self, full = False):
+        await self.load()
+        return {
+            "_check_id": self._check_id,
+            "startTime": jsonable_encoder(self.startTime),
+            "endTime": jsonable_encoder(self.endTime),
+            "success": self.success,
+            "output": self.output
+        }
+
+class Module(orm.Model):
+    __tablename__ = "module"
+    __database__ = database
+    __metadata__ = metadata
+
+    _id = orm.Integer(primary_key=True)
+    _cls_type = orm.String(max_length=100)
+    _cls_id = orm.Integer()
+    label = orm.String(max_length=100)
+    agent_module = orm.String(max_length=100)
+    active = orm.Boolean()
+    state = orm.JSON()
+    state_refreshed = orm.DateTime()
+
+
 class Hosting(orm.Model):
     __tablename__ = "hosting"
     __database__ = database

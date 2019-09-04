@@ -1,0 +1,3 @@
+﻿Domain,Status,Domain Extension,Domain Country,Expiration Date,Owner Name,Owner Country,DNS Profile,Auto-Renew
+marcaria1.test,Registered,CN,China,3/17/2020,"Test Company Limited",United Kingdom,Profile 1 (marcariatest1.local),ON
+marcaria2.test,In Registration Process,TH,Thailand,3/17/2020,"Test Company Limited",United Kingdom,Profile 2 (marcariatest2.local),OFF

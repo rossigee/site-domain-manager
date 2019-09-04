@@ -168,7 +168,7 @@ class K8S(WAFProviderAgent):
 
                 # Restart daemonset
                 _logger.info(f"Restarting nginx proxy daemonset '{siteid}'...")
-                label_selector = f"workload=proxy-{siteid}"
+                label_selector = f"app=proxy-{siteid}"
                 response = self.core_v1.list_namespaced_pod(self.namespace, label_selector=label_selector)
                 podlist = [x.metadata.name for x in response.items]
                 print(podlist)
@@ -390,6 +390,7 @@ spec:
 
     async def fetch_ips_for_site(self, site):
         ingress = None
+        await site.load()
         siteid = site.label.split(".")[0]
         for i in self.ingresses:
             if siteid == i['metadata']['name']:

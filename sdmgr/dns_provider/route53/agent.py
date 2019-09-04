@@ -47,15 +47,15 @@ class Route53(DNSProviderAgent):
         except Exception as e:
             _logger.exception(e)
 
-    def _get_zone_id_for_domain(self, domain):
-        if domain in self.zone_ids_cache:
-            return self.zone_ids_cache[domain]
-        zones = self.client.list_hosted_zones_by_name(DNSName=domain)
+    def _get_zone_id_for_domain(self, domainname):
+        if domainname in self.zone_ids_cache.keys():
+            return self.zone_ids_cache[domainname]
+        zones = self.client.list_hosted_zones_by_name(DNSName=domainname)
         if not zones or len(zones['HostedZones']) == 0:
-            raise DomainNotHostedException(domain)
+            raise DomainNotHostedException(domainname)
 
         zone_id = zones['HostedZones'][0]['Id'][12:]
-        self.zone_ids_cache[domain] = zone_id
+        self.zone_ids_cache[domainname] = zone_id
         return zone_id
 
     async def _wait_for_change_id(self, change_id):
@@ -102,30 +102,30 @@ class Route53(DNSProviderAgent):
     async def get_hosted_domains(self):
         return self.domains.keys()
 
-    async def get_status_for_domain(self, domain):
-        if domain not in self.domains:
+    async def get_status_for_domain(self, domainname):
+        if domainname not in self.domains:
             return {
-                'summary': f"No information for '{domain}'"
+                'summary': f"No information for '{domainname}'"
             }
-        zone_id = self._get_zone_id_for_domain(domain)
+        zone_id = self._get_zone_id_for_domain(domainname)
         return {
-            'name': domain,
+            'name': domainname,
             'summary': f"OK (R53 Zone: {zone_id})",
-            'nameservers': await self.get_ns_records(domain),
+            'nameservers': await self.get_ns_records(domainname),
         }
 
-    async def get_ns_records(self, domain):
-        zone_id = self._get_zone_id_for_domain(domain)
+    async def get_ns_records(self, domainname):
+        zone_id = self._get_zone_id_for_domain(domainname)
         response = self.client.list_resource_record_sets(
             HostedZoneId=zone_id,
             StartRecordType='NS',
-            StartRecordName=domain,
+            StartRecordName=domainname,
             MaxItems='1'
         )
         rrs = response['ResourceRecordSets']
         values = []
         if len(rrs) > 0:
-            if rrs[0]['Type'] == 'NS' and rrs[0]['Name'] == f"{domain}.":
+            if rrs[0]['Type'] == 'NS' and rrs[0]['Name'] == f"{domainname}.":
                 values = [x['Value'].strip(".") for x in rrs[0]['ResourceRecords']]
         return values
 
@@ -160,34 +160,31 @@ class Route53(DNSProviderAgent):
             _logger.exception(e)
 
     async def create_new_a_rr(self, domain, hostname, ip_addrs):
-        try:
-            zone_id = self._get_zone_id_for_domain(domain)
-            response = self.client.change_resource_record_sets(
-                HostedZoneId=zone_id,
-                ChangeBatch={
-                    'Comment': f"SDMGR setting {len(ip_addrs)} A record(s)",
-                    'Changes': [
-                        {
-                            'Action': 'UPSERT',
-                            'ResourceRecordSet': {
-                                'Name': hostname,
-                                'Type': 'A',
-                                'TTL': 300,
-                                'ResourceRecords': [
-                                    {
-                                        'Value': x
-                                    } for x in ip_addrs
-                                ],
-                            }
-                        },
-                    ]
-                }
-            )
-
-            await self._wait_for_change_id(response['ChangeInfo']['Id'])
-
-        except Exception as e:
-            _logger.exception(e)
+        zone_id = self._get_zone_id_for_domain(domain.name)
+        print(zone_id)
+        response = self.client.change_resource_record_sets(
+            HostedZoneId=zone_id,
+            ChangeBatch={
+                'Comment': f"SDMGR setting {len(ip_addrs)} A record(s)",
+                'Changes': [
+                    {
+                        'Action': 'UPSERT',
+                        'ResourceRecordSet': {
+                            'Name': hostname,
+                            'Type': 'A',
+                            'TTL': 300,
+                            'ResourceRecords': [
+                                {
+                                    'Value': x
+                                } for x in ip_addrs
+                            ],
+                        }
+                    },
+                ]
+            }
+        )
+        print(response)
+        await self._wait_for_change_id(response['ChangeInfo']['Id'])
 
     async def get_txt_records(self, domain):
         try:
@@ -195,7 +192,7 @@ class Route53(DNSProviderAgent):
                 await self.start()
 
             # Find existing TXT records for the domain
-            zone_id = self._get_zone_id_for_domain(domain)
+            zone_id = self._get_zone_id_for_domain(domain.name)
             response = self.client.list_resource_record_sets(
                 HostedZoneId=zone_id,
                 StartRecordType='TXT',

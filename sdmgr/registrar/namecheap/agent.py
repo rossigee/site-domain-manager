@@ -49,7 +49,7 @@ class Namecheap(RegistrarAgent):
             _logger.exception(e)
 
     def _get_url_prefix(self):
-        return f"{self.api_url}/xml.response?ApiUser={self.api_user}&ApiKey={self.api_token}&UserName={api_user}&ClientIp={self.client_ip}"
+        return f"{self.api_url}/xml.response?ApiUser={self.api_user}&ApiKey={self.api_token}&UserName={self.api_user}&ClientIp={self.client_ip}"
 
     async def get_refresh_method(self):
         return "api"
@@ -74,8 +74,10 @@ class Namecheap(RegistrarAgent):
 
         while page_num < page_count:
             page_num += 1
-            xmlstring = await get_page(page_num)
+            _logger.info(f"Fetching Namecheap domains page {page_num}")
             try:
+                xmlstring = await get_page(page_num)
+                print(xmlstring)
                 root = ElementTree.fromstring(xmlstring)
                 for d in root.findall('.//{http://api.namecheap.com/xml.response}Domain'):
                     dname = d.attrib['Name']
@@ -112,7 +114,7 @@ class Namecheap(RegistrarAgent):
         domain = self.domains[domainname]
         return {
             'name': domainname,
-            'summary': domain['status'],
+            'summary': domain['status'] or "N/A",
             'expiry_date': domain['expiry_date'],
             'auto_renew': domain['auto_renew'],
         }

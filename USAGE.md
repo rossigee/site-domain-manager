@@ -67,6 +67,14 @@ For Marcaria, register the domain and download a fresh list of domains (i.e. `Ex
 curl -sk -utesting:onetwothree -X POST -Fcsvfile=@Export_Domain_Lists.csv $SDMGR_URL/registrars/1/csvfile
 ```
 
+## IONOS
+
+...
+
+```
+curl -sk -utesting:onetwothree -X POST -Fcsvfile=@download.json $SDMGR_URL/registrars/3/jsonfile
+```
+
 ## Namecheap
 
 For Namecheap, just register the domain on Namecheap then update the list of domains via the 'refresh' API call.
@@ -101,7 +109,6 @@ curl -sk -utesting:onetwothree $SDMGR_URL/domains/31/check/ns
 
 This will check public DNS servers for the 'NS' records, and generate a request to the registrar if the NS records need setting/resetting. It will also create a Route53 zone for the domain if one does not already exist.
 
-
 ## A records
 
 To check that the A records on the domain are correctly set to point to your site (via WAF where applicable), you can use the 'check A records' API call:
@@ -111,6 +118,12 @@ curl -sk -utesting:onetwothree $SDMGR_URL/domains/31/check/a
 ```
 
 This will points the domain to the IP address of the domain's WAF. If no WAF is specified, it will point the domain to the IP address of the site host directly.
+
+## Check that WAF is configured to handle the domain
+
+```
+curl -sk -utesting:onetwothree $SDMGR_URL/domains/31/check/waf
+```
 
 
 # Other stuff

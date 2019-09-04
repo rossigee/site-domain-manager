@@ -59,6 +59,7 @@ class Marcaria(RegistrarAgent):
                 'name': row[0],
                 'status': row[1],
                 'expiry_date': expiry_date,
+                'dns_profile': row[7],
                 'auto_renew': row[8] == "ON"
             }
 

@@ -33,23 +33,34 @@ The main database models that the above agents work with are:
 Once added to the service, an async process is started for each site and domain that periodically assesses it's status. Essentially, it performs various checks to endure that the desired state in the provided config file matches the real world state as found by making checks (via direct API calls where possible) with the provider of the resource (domain registration, DNS hosting, SSL certificate, analytics provisioning, monitoring/alerting updates etc.) in question.
 
 
-## Development notes
+## User Interface
 
-To push a new build and make it active...
+There is a basic Angular-based UI included in the following repo:
+
+https://github.com/rossigee/site-domain-manager-ui
+
+
+## Local development with Minikube
+
+Further instructions in the (k8s/minikube/README.md)[k8s/minikube/README.md].
+
+
+## Local development with python virtualenv
+
+Start a new python virtualenv:
 
 ```
-docker build . -t agentwordpressregistry1.azurecr.io/sdmgr && \
-  docker push agentwordpressregistry1.azurecr.io/sdmgr && \
-  kubectl delete pod -l purpose=SiteDomainManager
+virtualenv -p python3 /tmp/sdmgr-venv
+. /tmp/sdmgr-venv/bin/activate
+pip3 install -r requirements
+export PYTHONPATH=.
+export DATABASE_URL=mysql://sdmgr:sdmgr@192.168.99.100:30306/sdmgr
+python sdmgr/app.py
 ```
 
-Very quick 'getting started' for local use...
+To run tests...
 
 ```
-virtualenv -p python3 /tmp/sdmgr-env
-python setup.py sdist
-pip3 install dist/site-domain-manager-0.0.1.tar.gz
-pip3 install aiosqlite
-export DATABASE_URL=sqlite:///db.sqlite
-sdmgr
+pip3 install pytest pytest-asyncio
+pytest
 ```
