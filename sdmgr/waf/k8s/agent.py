@@ -16,22 +16,46 @@ from .nginx import NGINX_CONF_TPL
 
 class K8S(WAFProviderAgent):
     def __init__(self, data):
+        _logger.info(f"Loading Kubernetes WAF provider agent (id: {data.id}): {data.label})")
         WAFProviderAgent.__init__(self, data)
-        _logger.info(f"Loading Kubernetes WAF provider agent (id: {self.id}): {self.label}")
 
-        # TODO: a better mechanism as this prevents configuration of multiple
-        # WAF targets
+    async def start(self):
+        await WAFProviderAgent.start(self)
+        self.refresh_config()
+
+    def refresh_config(self):
         k8s_config = kubernetes.client.Configuration()
-        k8s_config.host = os.getenv('K8S_API_URL')
-        k8s_config.api_key = {"authorization": "Bearer " + os.getenv('K8S_API_TOKEN')}
+        k8s_config.host = self._config('api_url')
+        k8s_config.api_key = {"authorization": "Bearer " + self._config('api_token')}
         k8s_config.verify_ssl = False
-        self.namespace = os.getenv('K8S_WAF_NAMESPACE')
-        self.context = os.getenv('K8S_WAF_CONTEXT')
 
         self.api_client = kubernetes.client.ApiClient(k8s_config)
         self.apps_v1 = kubernetes.client.AppsV1beta2Api(self.api_client)
         self.core_v1 = kubernetes.client.CoreV1Api(self.api_client)
         self.ext_v1 = kubernetes.client.ExtensionsV1beta1Api(self.api_client)
+
+        self.namespace = self._config('waf_namespace')
+        self.context = self._config('waf_context')
+
+    def _config_keys():
+        return [
+            {
+                'key': "api_url",
+                'description': "K8S API endpoint URL",
+            },
+            {
+                'key': "api_token",
+                'description': "K8S API endpoint token",
+            },
+            {
+                'key': "waf_namespace",
+                'description': "K8S namespace for WAF resources",
+            },
+            {
+                'key': "waf_context",
+                'description': "K8S context for WAF resources",
+            },
+        ]
 
     async def _load_state(self):
         await super(K8S, self)._load_state()
@@ -61,35 +85,23 @@ class K8S(WAFProviderAgent):
         }
         await super(K8S, self)._save_state()
 
-    async def start(self):
-        try:
-            _logger.debug(f"Starting K8S WAF provider agent (id: {self.id}).")
-            await self._load_state()
-
-        except Exception as e:
-            _logger.exception(e)
-
     async def _check_mime_types_config_map(self):
-        try:
-            # Fetch configmap
-            ret = self.core_v1.list_namespaced_config_map(self.namespace)
-            for c in ret.items:
-                if c.metadata.name == "mimetypes":
-                    _logger.debug("MIME types configmap already exists.")
-                    return
+        # Fetch configmap
+        ret = self.core_v1.list_namespaced_config_map(self.namespace)
+        for c in ret.items:
+            if c.metadata.name == "mimetypes":
+                _logger.debug("MIME types configmap already exists.")
+                return
 
-            # Create configmap
-            _logger.info(f"Creating MIME types configmap...")
-            body = kubernetes.client.V1ConfigMap(
-                metadata = kubernetes.client.V1ObjectMeta(name="mimetypes"),
-                data = {
-                    "mime.types": MIME_TYPES,
-                }
-            )
-            self.core_v1.create_namespaced_config_map(self.namespace, body)
-
-        except Exception as e:
-            _logger.exception(e)
+        # Create configmap
+        _logger.info(f"Creating MIME types configmap...")
+        body = kubernetes.client.V1ConfigMap(
+            metadata = kubernetes.client.V1ObjectMeta(name="mimetypes"),
+            data = {
+                "mime.types": MIME_TYPES,
+            }
+        )
+        self.core_v1.create_namespaced_config_map(self.namespace, body)
 
     async def refresh(self):
         _logger.info(f"Checking presence of 'mimetypes' config map")

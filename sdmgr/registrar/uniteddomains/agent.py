@@ -9,8 +9,8 @@ import orm
 
 class UnitedDomains(RegistrarAgent):
     def __init__(self, data):
+        _logger.info(f"Loading UnitedDomains registrar agent (id: {data.id}): {data.label})")
         RegistrarAgent.__init__(self, data)
-        _logger.info(f"Loading UnitedDomains registrar agent (id: {self.id}): {self.label}")
 
         self.domains = {}
         self.registrar = data
@@ -29,14 +29,6 @@ class UnitedDomains(RegistrarAgent):
             "domains": self.domains
         }
         await super(UnitedDomains, self)._save_state()
-
-    async def start(self):
-        try:
-            _logger.debug(f"Starting UnitedDomains registrar agent (id: {self.id}).")
-            await self._load_state()
-
-        except Exception as e:
-            _logger.exception(e)
 
     async def get_refresh_method(self):
         return "jsonfile"

@@ -29,7 +29,7 @@ spec:
           value: https://sdmgr.local/
         image: rossigee/sdmgr-ui:latest
         imagePullPolicy: Always
-        name: app
+        name: ui
         resources: {}
         securityContext:
           allowPrivilegeEscalation: false
@@ -81,4 +81,3 @@ spec:
   - hosts:
     - sdmgr.local
     secretName: sdmgr-tls
-

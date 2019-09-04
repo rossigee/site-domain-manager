@@ -16,10 +16,18 @@ class Setting(orm.Model):
     __metadata__ = metadata
 
     _id = orm.Integer(primary_key=True)
-    _cls_type = orm.String(max_length=100)
-    _cls_id = orm.Integer()
+    config_id = orm.String(max_length=100)
     s_key = orm.String(max_length=100)
     s_value = orm.Text(default="")
+
+    async def serialize(self, full = False):
+        await self.load()
+        return {
+            "_id": self._id,
+            "config_id": self.config_id,
+            "s_key": jsonable_encoder(self.s_key),
+            "s_value": jsonable_encoder(self.s_value),
+        }
 
 
 class StatusCheck(orm.Model):
@@ -43,20 +51,6 @@ class StatusCheck(orm.Model):
             "output": self.output
         }
 
-class Module(orm.Model):
-    __tablename__ = "module"
-    __database__ = database
-    __metadata__ = metadata
-
-    _id = orm.Integer(primary_key=True)
-    _cls_type = orm.String(max_length=100)
-    _cls_id = orm.Integer()
-    label = orm.String(max_length=100)
-    agent_module = orm.String(max_length=100)
-    active = orm.Boolean()
-    state = orm.JSON()
-    state_refreshed = orm.DateTime()
-
 
 class Hosting(orm.Model):
     __tablename__ = "hosting"
@@ -67,7 +61,74 @@ class Hosting(orm.Model):
     label = orm.String(max_length=100)
     agent_module = orm.String(max_length=100)
     config_id = orm.String(max_length=100, allow_null=True)
-    state = orm.Text(default="{}")
+    state = orm.JSON()
+    active = orm.Boolean(default=True)
+
+    async def serialize(self, full = False):
+        await self.load()
+        return {
+            "id": self.id,
+            "label": self.label
+        }
+
+
+class Registrar(orm.Model):
+    __tablename__ = "registrars"
+    __database__ = database
+    __metadata__ = metadata
+
+    id = orm.Integer(primary_key=True)
+    label = orm.String(max_length=100)
+    agent_module = orm.String(max_length=100)
+    config_id = orm.String(max_length=100, allow_null=True)
+    state = orm.JSON()
+    active = orm.Boolean(default=True)
+    updated_time = orm.DateTime()
+
+    async def serialize(self, full = False):
+        await self.load()
+        r = {
+            "id": self.id,
+            "label": self.label,
+            "updated_time": jsonable_encoder(self.updated_time)
+        }
+        return r
+
+
+class DNSProvider(orm.Model):
+    __tablename__ = "dns_providers"
+    __database__ = database
+    __metadata__ = metadata
+
+    id = orm.Integer(primary_key=True)
+    label = orm.String(max_length=100)
+    agent_module = orm.String(max_length=100)
+    config_id = orm.String(max_length=100, allow_null=True)
+    state = orm.JSON()
+    active = orm.Boolean(default=True)
+
+    async def serialize(self, full = False):
+        await self.load()
+        r = {
+            "id": self.id,
+            "label": self.label
+        }
+        if full:
+            r['agent_module'] = self.agent_module
+            r['active'] = self.active
+        return r
+
+
+class WAFProvider(orm.Model):
+    __tablename__ = "waf_providers"
+    __database__ = database
+    __metadata__ = metadata
+
+    id = orm.Integer(primary_key=True)
+    label = orm.String(max_length=100)
+    agent_module = orm.String(max_length=100)
+    config_id = orm.String(max_length=100, allow_null=True)
+    state = orm.JSON()
     active = orm.Boolean(default=True)
 
     async def serialize(self, full = False):
@@ -97,72 +158,6 @@ class Site(orm.Model):
             "active": self.active
         }
         return r
-
-class Registrar(orm.Model):
-    __tablename__ = "registrars"
-    __database__ = database
-    __metadata__ = metadata
-
-    id = orm.Integer(primary_key=True)
-    label = orm.String(max_length=100)
-    agent_module = orm.String(max_length=100)
-    config_id = orm.String(max_length=100, allow_null=True)
-    state = orm.Text(default="{}")
-    active = orm.Boolean(default=True)
-    updated_time = orm.DateTime()
-
-    async def serialize(self, full = False):
-        await self.load()
-        r = {
-            "id": self.id,
-            "label": self.label,
-            "updated_time": jsonable_encoder(self.updated_time)
-        }
-        return r
-
-
-class DNSProvider(orm.Model):
-    __tablename__ = "dns_providers"
-    __database__ = database
-    __metadata__ = metadata
-
-    id = orm.Integer(primary_key=True)
-    label = orm.String(max_length=100)
-    agent_module = orm.String(max_length=100)
-    config_id = orm.String(max_length=100, allow_null=True)
-    state = orm.Text(default="{}")
-    active = orm.Boolean(default=True)
-
-    async def serialize(self, full = False):
-        await self.load()
-        r = {
-            "id": self.id,
-            "label": self.label
-        }
-        if full:
-            r['agent_module'] = self.agent_module
-            r['active'] = self.active
-        return r
-
-
-class WAFProvider(orm.Model):
-    __tablename__ = "waf_providers"
-    __database__ = database
-    __metadata__ = metadata
-
-    id = orm.Integer(primary_key=True)
-    label = orm.String(max_length=100)
-    agent_module = orm.String(max_length=100)
-    config_id = orm.String(max_length=100, allow_null=True)
-    state = orm.Text(default="{}")
-    active = orm.Boolean(default=True)
-
-    async def serialize(self, full = False):
-        await self.load()
-        return {
-            "id": self.id,
-            "label": self.label
-        }
 
 
 class Domain(orm.Model):

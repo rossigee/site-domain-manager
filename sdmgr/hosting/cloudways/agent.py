@@ -15,16 +15,24 @@ BASE_URL = "https://api.cloudways.com/api/v1/"
 
 class Cloudways(HostingAgent):
     def __init__(self, data):
+        _logger.info(f"Loading Cloudways hosting provider agent (id: {data.id}): {data.label})")
         HostingAgent.__init__(self, data)
-        _logger.info(f"Initialising Cloudways hosting provider agent (id: {self.id}): {self.label}")
-
-        self.api_email = os.getenv('CLOUDWAYS_API_EMAIL')
-        self.api_key = os.getenv('CLOUDWAYS_API_KEY')
-        self.letsencrypt_email = os.getenv('LETSENCRYPT_EMAIL')
 
         self.headers = None
         self.token_expires = None
         self.servers = []
+
+    def _config_keys():
+        return [
+            {
+                'key': "api_email",
+                'description': "Cloudways API email",
+            },
+            {
+                'key': "api_key",
+                'description': "Cloudways API key",
+            },
+        ]
 
     async def _load_state(self):
         await super(Cloudways, self)._load_state()
@@ -41,19 +49,6 @@ class Cloudways(HostingAgent):
         }
         await super(Cloudways, self)._save_state()
 
-    async def start(self):
-        try:
-            _logger.info(f"Starting Cloudways hosting provider agent (id: {self.id}).")
-            await self._load_state()
-
-            # TODO: Acquire credentials
-            # (have it use envvars for now)
-
-            #await self._populate_sites()
-
-        except Exception as e:
-            _logger.exception(e)
-
     def _has_token_expired(self):
         return self.token_expires is None or self.token_expires < datetime.datetime.now()
 
@@ -63,8 +58,8 @@ class Cloudways(HostingAgent):
 
         url = BASE_URL + "oauth/access_token"
         payload = {
-            "email": self.api_email,
-            "api_key": self.api_key
+            "email": self._config("api_email"),
+            "api_key": self._config("api_key")
         }
         async with aiohttp.ClientSession() as session:
             async with session.post(url, data=payload) as response:

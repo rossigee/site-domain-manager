@@ -2,8 +2,8 @@ apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
   labels:
-    app: sdmgr
-  name: app
+    app: sdmgr-api
+  name: api
   namespace: default
 spec:
   progressDeadlineSeconds: 600
@@ -11,7 +11,7 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      app: sdmgr
+      app: sdmgr-api
   strategy:
     rollingUpdate:
       maxSurge: 25%
@@ -21,7 +21,7 @@ spec:
     metadata:
       creationTimestamp: null
       labels:
-        app: sdmgr
+        app: sdmgr-api
     spec:
       containers:
       - env:
@@ -31,7 +31,7 @@ spec:
           value: /api/v1
         image: rossigee/sdmgr:latest
         imagePullPolicy: Always
-        name: app
+        name: api
         resources: {}
         securityContext:
           allowPrivilegeEscalation: false
@@ -53,7 +53,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: app
+  name: api
   namespace: default
 spec:
   ports:
@@ -61,7 +61,7 @@ spec:
     protocol: TCP
     targetPort: 8000
   selector:
-    app: sdmgr
+    app: sdmgr-api
   sessionAffinity: None
   type: ClusterIP
 ---
@@ -71,16 +71,16 @@ metadata:
   name: sdmgr
   namespace: default
   annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/rewrite-target: /
 spec:
   rules:
   - host: sdmgr.local
     http:
       paths:
       - backend:
-          serviceName: app
+          serviceName: api
           servicePort: 8000
-        path: /api/v1(/|$)(.*)
+        path: /api/v1
   tls:
   - hosts:
     - sdmgr.local

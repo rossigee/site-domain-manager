@@ -25,6 +25,7 @@ async def fetch_records_from_dns(domain, type):
         _logger.exception(e)
     return []
 
+
 class ManagerStatusCheck:
     _check_id: str
     startTime: datetime.datetime

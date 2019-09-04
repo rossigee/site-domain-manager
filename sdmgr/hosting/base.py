@@ -1,4 +1,5 @@
 from sdmgr.db import Hosting
+from sdmgr.agent import BaseAgent
 
 import logging
 _logger = logging.getLogger(__name__)
@@ -6,24 +7,16 @@ _logger = logging.getLogger(__name__)
 import json
 
 
-class HostingAgent():
-    def __init__(self, data):
-        self.id = data.id
-        self.label = data.label
-        self.state = {}
-
+class HostingAgent(BaseAgent):
     async def _load_state(self):
         _logger.debug(f"Restoring state for hosting '{self.label}'")
         r = await Hosting.objects.get(id = self.id)
-        try:
-            self.state = json.loads(r.state)
-        except Exception as e:
-            _logger.exception(e)
+        self.config_id = r.config_id
+        self.state = r.state
 
     async def _save_state(self):
         _logger.info(f"Saving state for hosting '{self.label}'")
         r = await Hosting.objects.get(id = self.id)
-        try:
-            await r.update(state=json.dumps(self.state))
-        except Exception as e:
-            _logger.exception(e)
+        await r.update(
+            state = self.state
+        )

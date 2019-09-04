@@ -1,38 +1,27 @@
 from sdmgr.db import Registrar, Domain
+from sdmgr.agent import BaseAgent
 
 import logging
 _logger = logging.getLogger(__name__)
 
-import json
 import orm
 import datetime
 
 
-class RegistrarAgent():
-    def __init__(self, data):
-        self.id = data.id
-        self.label = data.label
-        self.state = {}
-        self.updated_time = None
-
+class RegistrarAgent(BaseAgent):
     async def _load_state(self):
         _logger.debug(f"Restoring state for registrar '{self.label}'")
         r = await Registrar.objects.get(id = self.id)
-        try:
-            self.state = json.loads(r.state)
-        except Exception as e:
-            _logger.exception(e)
+        self.config_id = r.config_id
+        self.state = r.state
 
     async def _save_state(self):
         _logger.info(f"Saving state for registrar '{self.label}'")
         r = await Registrar.objects.get(id = self.id)
-        try:
-            await r.update(
-                state=json.dumps(self.state),
-                updated_time = datetime.datetime.now()
-            )
-        except Exception as e:
-            _logger.exception(e)
+        await r.update(
+            state=self.state,
+            updated_time = datetime.datetime.now()
+        )
 
     async def get_registered_domains(self):
         raise NotImplementedError

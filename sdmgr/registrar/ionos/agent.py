@@ -9,8 +9,8 @@ import orm
 
 class IONOS(RegistrarAgent):
     def __init__(self, data):
+        _logger.info(f"Loading IONOS registrar agent (id: {data.id}): {data.label})")
         RegistrarAgent.__init__(self, data)
-        _logger.info(f"Loading IONOS registrar agent (id: {self.id}): {self.label}")
 
         self.domains = {}
         self.registrar = data
@@ -29,14 +29,6 @@ class IONOS(RegistrarAgent):
             "domains": self.domains
         }
         await super(IONOS, self)._save_state()
-
-    async def start(self):
-        try:
-            _logger.debug(f"Starting IONOS registrar agent (id: {self.id}).")
-            await self._load_state()
-
-        except Exception as e:
-            _logger.exception(e)
 
     async def get_refresh_method(self):
         return "jsonfile"

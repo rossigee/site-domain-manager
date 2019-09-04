@@ -8,20 +8,33 @@ import orm
 import aiohttp
 from xml.etree import ElementTree
 
+#API_URL = "https://api.sandbox.namecheap.com"
+API_URL = "https://api.namecheap.com"
+
 
 class Namecheap(RegistrarAgent):
     def __init__(self, data):
+        _logger.info(f"Loading Namecheap registrar agent (id: {data.id}): {data.label})")
         RegistrarAgent.__init__(self, data)
-        _logger.info(f"Loading Namecheap registrar agent (id: {self.id}): {self.label}")
-
-        #self.api_url = "https://api.sandbox.namecheap.com/xml.response"
-        self.api_url = "https://api.namecheap.com/xml.response"
-        self.api_user = os.getenv("NAMECHEAP_API_USER")
-        self.api_token = os.getenv("NAMECHEAP_API_TOKEN")
-        self.client_ip = os.getenv("NAMECHEAP_CLIENT_IP")
 
         self.domains = {}
         self.registrar = data
+
+    def _config_keys():
+        return [
+            {
+                'key': "api_user",
+                'description': "Namecheap API user",
+            },
+            {
+                'key': "api_token",
+                'description': "Namecheap API token",
+            },
+            {
+                'key': "client_ip",
+                'description': "Client IP to report in requests",
+            },
+        ]
 
     async def _load_state(self):
         await super(Namecheap, self)._load_state()
@@ -38,18 +51,11 @@ class Namecheap(RegistrarAgent):
         }
         await super(Namecheap, self)._save_state()
 
-    async def start(self):
-        try:
-            _logger.debug(f"Starting Namecheap registrar agent (id: {self.id}).")
-            await self._load_state()
-
-            #await self.refresh_domains()
-
-        except Exception as e:
-            _logger.exception(e)
-
     def _get_url_prefix(self):
-        return f"{self.api_url}/xml.response?ApiUser={self.api_user}&ApiKey={self.api_token}&UserName={self.api_user}&ClientIp={self.client_ip}"
+        api_user = self._config("api_user")
+        api_token = self._config("api_token")
+        client_ip = self._config("client_ip")
+        return f"{API_URL}/xml.response?ApiUser={api_user}&ApiKey={api_token}&UserName={api_user}&ClientIp={client_ip}"
 
     async def get_refresh_method(self):
         return "api"

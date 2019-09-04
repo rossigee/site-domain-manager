@@ -1,17 +1,21 @@
 from fastapi import HTTPException
 
 import ldap, os
+import json
 
 async def auth(username, password):
-    ldap_url = os.environ.get("LDAP_URL")
+    authconfig_filename = os.getenv("AUTH_CONFIG")
+    authconfig = json.load(authconfig_filename)
+
+    ldap_url = authconfig['ldap_url']
     connect = ldap.initialize(ldap_url)
     connect.set_option(ldap.OPT_REFERRALS, 0)
 
     # Bind as search user (find DN to auth user with)
-    bind_dn = os.environ.get("LDAP_BIND_DN")
-    bind_pw = os.environ.get("LDAP_BIND_PW")
-    base_dn = os.environ.get("LDAP_SEARCH_DN")
-    user_search_filter = os.environ.get("LDAP_FILTER") % { 'username': username }
+    bind_dn = authconfig['ldap_bind_dn']
+    bind_pw = authconfig['ldap_bind_pw']
+    base_dn = authconfig['ldap_search_dn']
+    user_search_filter = authconfig['ldap_filter'] % { 'username': username }
     try:
         connect.simple_bind_s(bind_dn, bind_pw)
     except ldap.LDAPError as e:
