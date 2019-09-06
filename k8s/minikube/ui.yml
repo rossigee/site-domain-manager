@@ -26,7 +26,7 @@ spec:
       containers:
       - env:
         - name: API_URL
-          value: https://sdmgr.local/
+          value: https://sdmgr.local/api/v1
         image: rossigee/sdmgr-ui:latest
         imagePullPolicy: Always
         name: ui
