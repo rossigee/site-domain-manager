@@ -91,8 +91,8 @@ class Manager:
         # TODO: Connect to Google to fetch/verify the GSV codes via API?
 
     async def __init_agents(self):
-        def import_agent(agent_module_name):
-            agent_module = importlib.import_module(agent_module_name)
+        def _init_instance(module_name):
+            agent_module = importlib.import_module(module_name)
             agent_class = getattr(agent_module, "Agent")
             return agent_class(agentdata)
 
@@ -101,28 +101,28 @@ class Manager:
         _logger.debug("Initialising Registrar agents...")
         agents = await Registrar.objects.filter(active=True).all()
         for agentdata in agents:
-            agent = import_agent(agentdata.agent_module)
+            agent = _init_instance(agentdata.agent_module)
             coros.append(agent.start())
             self.registrar_agents[agent.id] = agent
 
         _logger.debug("Initialising DNS provider agents...")
         agents = await DNSProvider.objects.filter(active=True).all()
         for agentdata in agents:
-            agent = import_agent(agentdata.agent_module)
+            agent = _init_instance(agentdata.agent_module)
             coros.append(agent.start())
             self.dns_agents[agent.id] = agent
 
         _logger.debug("Initialising site hosting agents...")
         agents = await Hosting.objects.filter(active=True).all()
         for agentdata in agents:
-            agent = import_agent(agentdata.agent_module)
+            agent = _init_instance(agentdata.agent_module)
             coros.append(agent.start())
             self.hosting_agents[agent.id] = agent
 
         _logger.debug("Initialising WAF provider agents...")
         agents = await WAFProvider.objects.filter(active=True).all()
         for agentdata in agents:
-            agent = import_agent(agentdata.agent_module)
+            agent = _init_instance(agentdata.agent_module)
             coros.append(agent.start())
             self.waf_agents[agent.id] = agent
 

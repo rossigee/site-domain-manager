@@ -8,6 +8,8 @@ import orm
 
 
 class Marcaria(RegistrarAgent):
+    _label_ = "Marcaria"
+
     def __init__(self, data):
         _logger.info(f"Loading Marcaria registrar agent (id: {data.id}): {data.label})")
         RegistrarAgent.__init__(self, data)

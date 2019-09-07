@@ -9,6 +9,8 @@ import orm
 
 
 class WAFProviderAgent(BaseAgent):
+    _agent_type_ = "waf"
+
     async def _load_state(self):
         _logger.debug(f"Restoring state for WAF provider '{self.label}'")
         r = await WAFProvider.objects.get(id = self.id)

@@ -7,13 +7,10 @@ import uvicorn
 from sdmgr import settings, manager
 from sdmgr.db import *
 from sdmgr.oauth2 import *
+from sdmgr.agent import *
 
-import os
-import sys
-import datetime
 import signal
 import asyncio
-import importlib
 
 import logging
 _logger = logging.getLogger(__name__)
@@ -56,6 +53,17 @@ async def reconcile(user = Depends(get_current_user)):
     return JSONResponse({
         "status": status
     })
+
+
+@app.get("/agents")
+async def agents(user = Depends(get_current_user)):
+    """
+    Returns the list of available agent modules, and their settings. Allows
+    the UI to request a list of available agents that can be configured, and
+    the configuration settings that each agent depends on.
+    """
+    return JSONResponse(await fetch_available_agents_and_settings())
+
 
 @app.get("/metrics")
 async def metrics():
@@ -113,6 +121,9 @@ async def startup():
         loop.add_signal_handler(
             s, lambda s=s: asyncio.create_task(shutdown(signal=s)))
     loop.set_exception_handler(handle_exception)
+
+    _logger.debug("Loading modules...")
+    await load_and_register_agents()
 
     _logger.debug("Connecting to database...")
     await database.connect()

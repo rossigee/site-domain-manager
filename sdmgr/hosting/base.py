@@ -8,6 +8,8 @@ import json
 
 
 class HostingAgent(BaseAgent):
+    _agent_type_ = "hosting"
+
     async def _load_state(self):
         _logger.debug(f"Restoring state for hosting '{self.label}'")
         r = await Hosting.objects.get(id = self.id)

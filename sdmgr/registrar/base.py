@@ -9,6 +9,8 @@ import datetime
 
 
 class RegistrarAgent(BaseAgent):
+    _agent_type_ = "registrar"
+
     async def _load_state(self):
         _logger.debug(f"Restoring state for registrar '{self.label}'")
         r = await Registrar.objects.get(id = self.id)

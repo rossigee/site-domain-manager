@@ -13,28 +13,29 @@ API_URL = "https://api.namecheap.com"
 
 
 class Namecheap(RegistrarAgent):
+    _label_ = "Namecheap"
+
+    _settings_ = [
+        {
+            'key': "api_user",
+            'description': "Namecheap API user",
+        },
+        {
+            'key': "api_token",
+            'description': "Namecheap API token",
+        },
+        {
+            'key': "client_ip",
+            'description': "Client IP to report in requests",
+        },
+    ]
+
     def __init__(self, data):
         _logger.info(f"Loading Namecheap registrar agent (id: {data.id}): {data.label})")
         RegistrarAgent.__init__(self, data)
 
         self.domains = {}
         self.registrar = data
-
-    def _config_keys():
-        return [
-            {
-                'key': "api_user",
-                'description': "Namecheap API user",
-            },
-            {
-                'key': "api_token",
-                'description': "Namecheap API token",
-            },
-            {
-                'key': "client_ip",
-                'description': "Client IP to report in requests",
-            },
-        ]
 
     async def _load_state(self):
         await super(Namecheap, self)._load_state()

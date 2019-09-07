@@ -9,6 +9,8 @@ import orm
 
 
 class DNSProviderAgent(BaseAgent):
+    _agent_type_ = "dns"
+
     async def _load_state(self):
         _logger.debug(f"Restoring state for DNS provider '{self.label}'")
         r = await DNSProvider.objects.get(id = self.id)

@@ -8,6 +8,8 @@ import orm
 
 
 class IONOS(RegistrarAgent):
+    _label_ = "IONOS (formerly 1&1)"
+
     def __init__(self, data):
         _logger.info(f"Loading IONOS registrar agent (id: {data.id}): {data.label})")
         RegistrarAgent.__init__(self, data)

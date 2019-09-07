@@ -8,6 +8,8 @@ import orm
 
 
 class UnitedDomains(RegistrarAgent):
+    _label_ = "United Domains"
+
     def __init__(self, data):
         _logger.info(f"Loading UnitedDomains registrar agent (id: {data.id}): {data.label})")
         RegistrarAgent.__init__(self, data)

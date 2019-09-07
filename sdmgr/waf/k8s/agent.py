@@ -15,6 +15,27 @@ from .nginx import NGINX_CONF_TPL
 
 
 class K8S(WAFProviderAgent):
+    _label_ = "Kubernetes w/Nginx Ingress"
+
+    _settings_ = [
+        {
+            'key': "api_url",
+            'description': "K8S API endpoint URL",
+        },
+        {
+            'key': "api_token",
+            'description': "K8S API endpoint token",
+        },
+        {
+            'key': "waf_namespace",
+            'description': "K8S namespace for WAF resources",
+        },
+        {
+            'key': "waf_context",
+            'description': "K8S context for WAF resources",
+        },
+    ]
+
     def __init__(self, data):
         _logger.info(f"Loading Kubernetes WAF provider agent (id: {data.id}): {data.label})")
         WAFProviderAgent.__init__(self, data)
@@ -36,26 +57,6 @@ class K8S(WAFProviderAgent):
 
         self.namespace = self._config('waf_namespace')
         self.context = self._config('waf_context')
-
-    def _config_keys():
-        return [
-            {
-                'key': "api_url",
-                'description': "K8S API endpoint URL",
-            },
-            {
-                'key': "api_token",
-                'description': "K8S API endpoint token",
-            },
-            {
-                'key': "waf_namespace",
-                'description': "K8S namespace for WAF resources",
-            },
-            {
-                'key': "waf_context",
-                'description': "K8S context for WAF resources",
-            },
-        ]
 
     async def _load_state(self):
         await super(K8S, self)._load_state()

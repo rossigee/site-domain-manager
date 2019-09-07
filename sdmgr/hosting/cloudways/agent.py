@@ -14,6 +14,19 @@ import orm
 BASE_URL = "https://api.cloudways.com/api/v1/"
 
 class Cloudways(HostingAgent):
+    _label_ = "Cloudways"
+
+    _settings_ = [
+        {
+            'key': "api_email",
+            'description': "Cloudways API email",
+        },
+        {
+            'key': "api_key",
+            'description': "Cloudways API key",
+        },
+    ]
+
     def __init__(self, data):
         _logger.info(f"Loading Cloudways hosting provider agent (id: {data.id}): {data.label})")
         HostingAgent.__init__(self, data)
@@ -21,18 +34,6 @@ class Cloudways(HostingAgent):
         self.headers = None
         self.token_expires = None
         self.servers = []
-
-    def _config_keys():
-        return [
-            {
-                'key': "api_email",
-                'description': "Cloudways API email",
-            },
-            {
-                'key': "api_key",
-                'description': "Cloudways API key",
-            },
-        ]
 
     async def _load_state(self):
         await super(Cloudways, self)._load_state()

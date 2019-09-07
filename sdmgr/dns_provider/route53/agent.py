@@ -9,24 +9,25 @@ import boto3
 
 
 class Route53(DNSProviderAgent):
+    _label_ = "Amazon Route53"
+
+    _settings_ = [
+        {
+            'key': "aws_access_key_id",
+            'description': "AWS access key ID",
+        },
+        {
+            'key': "aws_secret_access_key",
+            'description': "AWS secret access key",
+        },
+    ]
+
     def __init__(self, data):
         _logger.info(f"Loading Route53 DNS provider agent (id: {data.id}): {data.label})")
         DNSProviderAgent.__init__(self, data)
 
         self.domains = {}
         self.zone_ids_cache = {}
-
-    def _config_keys():
-        return [
-            {
-                'key': "aws_access_key_id",
-                'description': "AWS access key ID",
-            },
-            {
-                'key': "aws_secret_access_key",
-                'description': "AWS secret access key",
-            },
-        ]
 
     async def _load_state(self):
         await super(Route53, self)._load_state()
