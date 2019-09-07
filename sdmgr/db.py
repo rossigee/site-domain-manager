@@ -35,6 +35,7 @@ class StatusCheck(orm.Model):
     __database__ = database
     __metadata__ = metadata
 
+    _id = orm.Integer(primary_key=True)
     _check_id = orm.String(max_length=100, unique=True)
     startTime = orm.DateTime()
     endTime = orm.DateTime(allow_null=True)
