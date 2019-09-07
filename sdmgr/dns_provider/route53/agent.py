@@ -43,7 +43,7 @@ class Route53(DNSProviderAgent):
         }
         await super(Route53, self)._save_state()
 
-    async def get_client(self):
+    def get_client(self):
         return boto3.client('route53',
             aws_access_key_id = self._config("aws_access_key_id"),
             aws_secret_access_key = self._config("aws_secret_access_key")
