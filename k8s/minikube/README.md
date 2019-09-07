@@ -63,3 +63,16 @@ Then, you should be all set to access the API via:
 Additionally, you should be able to access it via the UI:
 
 * (https://sdmgr.local/)
+
+
+# Proxy port for local development of UI
+
+So, if you were to develop [the UI](https://github.com/rossigee/site-domain-manager-ui) locally, using `ng serve` to run on port 4200 or whatever, you would likely have CORS issues when the UI tries to connect back to the server using a non-localhost hostname.
+
+There is a simple workaround, and that is to use `kubectl` to listen on a localhost port and proxy the requests to the API service in minikube directly. This can be achieved by running the following command in a spare terminal in the background:
+
+```
+kubectl port-forward service/api 8000
+```
+
+Then you should ensure the UI is configured (in `src/environments/environment.ts`) to use `http://localhost:8000/api/v1`.
