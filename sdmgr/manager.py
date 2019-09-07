@@ -59,7 +59,7 @@ class ManagerStatusCheck:
                 startTime = self.startTime,
                 endTime = self.endTime,
                 success = self.success,
-                output = self.output
+                output = str(self.output)
             )
 
         # If status has changed, log an audit entry
@@ -165,7 +165,7 @@ class Manager:
         except AttributeError:
             return (None, f"DNS provider not configured.")
         except KeyError:
-            return (None, f"DNS provider '{domain.dns.label}' agent not loaded.")
+            return (None, f"DNS provider '{domain.dns}' agent not loaded.")
 
     # TODO: Finish testing/documenting.
     async def check_all_active_domains(self):
