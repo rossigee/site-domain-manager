@@ -465,7 +465,7 @@ async def metrics():
         elif id == "agent_counts":
             output += format_metric_header(id, f"Number of active service provider agents", "gauge")
             for type in val:
-                fullid = f"sdmgr_agent_count" + '{"' + type + '"}'
+                fullid = f"sdmgr_agent_count" + '{type="' + type + '"}'
                 output += f"{fullid} {val[type]}\n"
             output += "\n"
 
