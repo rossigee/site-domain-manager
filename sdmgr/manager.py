@@ -232,7 +232,7 @@ class Manager:
 
         # Fetch the records the DNS provider says they should be set to
         try:
-            _logger.info(f"Retrieving intended NS records for {domain.name} from {dns_agent.label}...")
+            _logger.debug(f"Retrieving intended NS records for {domain.name} from {dns_agent.label}...")
             agent_ns = await dns_agent.get_ns_records(domain.name)
             if len(agent_ns) < 1:
                 return await status.error(f"DNS provider for domain '{domain.name}' has no NS records.")
@@ -252,6 +252,7 @@ class Manager:
             return await status.error(f"NS records set incorrectly")
 
         # Otherwise, things look hunky-dorey NS record wise.
+        _logger.info(f"NS records for {domain.name} match records from {dns_agent.label}.")
         return await status.success()
 
     async def check_domain_a_records(self, domain):
@@ -272,7 +273,7 @@ class Manager:
         if domain.update_apex:
             a_record = domain.name
             if await dns_a_record_already_set(a_record):
-                _logger.info(f"DNS apex record for '{domain.name}' with {dns_agent.label} resolves to expected hosting IPs.")
+                _logger.debug(f"DNS apex record for '{domain.name}' with {dns_agent.label} resolves to expected hosting IPs.")
             else:
                 return status.error(f"DNS apex record for '{domain.name}' does not resolve to expected hosting IPs.")
 
@@ -281,12 +282,13 @@ class Manager:
             for prefix in domain.update_a_records.split(","):
                 a_record = f"{prefix}.{domain.name}"
                 if await dns_a_record_already_set(a_record):
-                    _logger.info(f"DNS A record for '{a_record}' with {dns_agent.label} resolves to expected hosting IPs.")
+                    _logger.debug(f"DNS A record for '{a_record}' with {dns_agent.label} resolves to expected hosting IPs.")
                 else:
                     return await status.error(f"DNS A record for '{a_record}' does not resolve to expected hosting IPs.")
 
         # Otherwise, things look hunky-dorey A record wise.
-        return status.success()
+        _logger.info(f"A records for {domain.name} with {dns_agent.label} resolve to expected hosting IPs.")
+        return await status.success()
 
     async def apply_domain_a_records(self, domain):
         (dns_agent, error) = await self._fetch_dns_agent(domain)
@@ -475,3 +477,6 @@ class Manager:
 
         except Exception as e:
             _logger.exception(e)
+
+# Singleton singleton
+m = Manager()
