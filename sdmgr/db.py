@@ -59,9 +59,8 @@ class Hosting(orm.Model):
     __metadata__ = metadata
 
     id = orm.Integer(primary_key=True)
-    label = orm.String(max_length=100)
+    label = orm.String(max_length=100, unique=True)
     agent_module = orm.String(max_length=100)
-    config_id = orm.String(max_length=100, allow_null=True)
     state = orm.JSON()
     active = orm.Boolean(default=True)
 
@@ -79,9 +78,8 @@ class Registrar(orm.Model):
     __metadata__ = metadata
 
     id = orm.Integer(primary_key=True)
-    label = orm.String(max_length=100)
+    label = orm.String(max_length=100, unique=True)
     agent_module = orm.String(max_length=100)
-    config_id = orm.String(max_length=100, allow_null=True)
     state = orm.JSON()
     active = orm.Boolean(default=True)
     updated_time = orm.DateTime()
@@ -102,9 +100,8 @@ class DNSProvider(orm.Model):
     __metadata__ = metadata
 
     id = orm.Integer(primary_key=True)
-    label = orm.String(max_length=100)
+    label = orm.String(max_length=100, unique=True)
     agent_module = orm.String(max_length=100)
-    config_id = orm.String(max_length=100, allow_null=True)
     state = orm.JSON()
     active = orm.Boolean(default=True)
 
@@ -126,9 +123,8 @@ class WAFProvider(orm.Model):
     __metadata__ = metadata
 
     id = orm.Integer(primary_key=True)
-    label = orm.String(max_length=100)
+    label = orm.String(max_length=100, unique=True)
     agent_module = orm.String(max_length=100)
-    config_id = orm.String(max_length=100, allow_null=True)
     state = orm.JSON()
     active = orm.Boolean(default=True)
 
@@ -146,7 +142,7 @@ class Site(orm.Model):
     __metadata__ = metadata
 
     id = orm.Integer(primary_key=True)
-    label = orm.String(max_length=100)
+    label = orm.String(max_length=100, unique=True)
     hosting = orm.ForeignKey(Hosting)
     active = orm.Boolean(default=True)
 
@@ -167,7 +163,7 @@ class Domain(orm.Model):
     __metadata__ = metadata
 
     id = orm.Integer(primary_key=True)
-    name = orm.String(max_length=100)
+    name = orm.String(max_length=100, unique=True)
     registrar = orm.ForeignKey(Registrar)
     dns = orm.ForeignKey(DNSProvider, allow_null=True)
     site = orm.ForeignKey(Site, allow_null=True)

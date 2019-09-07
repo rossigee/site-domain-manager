@@ -14,7 +14,6 @@ class DNSProviderAgent(BaseAgent):
     async def _load_state(self):
         _logger.debug(f"Restoring state for DNS provider '{self.label}'")
         r = await DNSProvider.objects.get(id = self.id)
-        self.config_id = r.config_id
         self.state = r.state
 
     async def _save_state(self):

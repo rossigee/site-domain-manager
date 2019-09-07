@@ -1,9 +1,15 @@
 from fastapi import APIRouter, Depends, File
 from starlette.responses import JSONResponse, Response
+from starlette.status import HTTP_201_CREATED
+import pymysql
 
 from sdmgr.oauth2 import *
 from sdmgr.db import *
 from sdmgr.manager import m
+
+from pydantic import BaseModel
+
+import datetime
 
 import logging
 _logger = logging.getLogger(__name__)
@@ -11,11 +17,36 @@ _logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+class RegistrarModel(BaseModel):
+    agent_module: str
+    label: str
+
+
 @router.get("/registrars", tags=["registrars"])
 async def list_registrars(user = Depends(get_current_user)):
     return JSONResponse({
         "registrars": [await registrar.serialize() for registrar in await Registrar.objects.all()]
     })
+
+
+@router.post("/registrars", tags=["registrars"])
+async def create_registrar(registrar: RegistrarModel, user = Depends(get_current_user)):
+    try:
+        data = registrar.dict()
+        instance = await Registrar.objects.create(
+            label = data['label'],
+            agent_module = data['agent_module'],
+            updated_time = datetime.datetime.now(),
+            state = {},
+        )
+        content = await instance.serialize()
+        return JSONResponse(status_code=HTTP_201_CREATED, content=content)
+    except pymysql.err.IntegrityError as mie:
+        return JSONResponse(status_code=422, content={
+            "detail": f"Registrar already exists with label '{data['label']}''."
+        })
+    except Exception as e:
+        _logger.exception(e)
 
 
 @router.get("/registrars/{id:int}", tags=["registrars"])

@@ -13,7 +13,6 @@ class HostingAgent(BaseAgent):
     async def _load_state(self):
         _logger.debug(f"Restoring state for hosting '{self.label}'")
         r = await Hosting.objects.get(id = self.id)
-        self.config_id = r.config_id
         self.state = r.state
 
     async def _save_state(self):

@@ -14,7 +14,7 @@ class BaseAgent():
     def __init__(self, data):
         self.id = data.id
         self.label = data.label
-        self.config_id = data.config_id
+        self.config_id = f"{self._agent_type_}:{data.id}"
         self.config = {}
         self.state = {}
         self.updated_time = None
