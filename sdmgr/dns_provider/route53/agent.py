@@ -1,4 +1,5 @@
 from ..base import DNSProviderAgent
+from .. import DomainNotHostedException
 
 import logging
 _logger = logging.getLogger(__name__)

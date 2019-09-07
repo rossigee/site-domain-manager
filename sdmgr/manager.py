@@ -9,6 +9,8 @@ import datetime
 import importlib
 
 from sdmgr.db import *
+from sdmgr.dns_provider import DomainNotHostedException
+
 
 import logging
 _logger = logging.getLogger(__name__)
@@ -16,14 +18,8 @@ _logger = logging.getLogger(__name__)
 
 async def fetch_records_from_dns(domain, type):
     resolver = aiodns.DNSResolver()
-    try:
-        rr = await resolver.query(domain, type)
-        return [x.host for x in rr]
-    except aiodns.error.DNSError as e:
-        _logger.error(f"DNS error looking up domain {domain}: {e.__str__()}")
-    except Exception as e:
-        _logger.exception(e)
-    return []
+    rr = await resolver.query(domain, type)
+    return [x.host for x in rr]
 
 
 class ManagerStatusCheck:
@@ -238,21 +234,32 @@ class Manager:
                 return await status.error(f"DNS provider for domain '{domain.name}' has no NS records.")
             agent_ns_resolved = [resolve(x) for x in agent_ns]
 
+        except DomainNotHostedException as dnhe:
+            await self.create_missing_dns_zone(domain)
+            return await status.error(f"Awaiting propogation of NS record change.")
+
         except Exception as e:
             _logger.exception(e)
-            return await status.error(f"Exception occurred while looking up NS records for domain '{domain.name}': {str(e)}")
+            return await status.error(f"Exception occurred while checking intended NS records: {str(e)}")
 
         # What do public nameservers tell us the NS are currently set to?
-        dns_ns = await fetch_records_from_dns(domain.name, 'NS')
-        dns_ns_resolved = [resolve(x) for x in dns_ns]
+        try:
+            dns_ns = await fetch_records_from_dns(domain.name, 'NS')
+            dns_ns_resolved = [resolve(x) for x in dns_ns]
 
-        # If they don't match, action will be required.
-        if len(dns_ns) <= 0 or set(agent_ns_resolved) != set(agent_ns_resolved):
-            agent_ns_list = ",".join(agent_ns)
-            return await status.error(f"NS records set incorrectly")
+            # If they don't match, action will be required.
+            if len(dns_ns) <= 0 or set(agent_ns_resolved) != set(dns_ns_resolved):
+                agent_ns_list = ",".join(agent_ns)
+                await domain.registrar.load()
+                await self.update_ns_records_with_registrar(domain, agent_ns)
+                return await status.error(f"NS records set incorrectly. Please check settings with registrar {domain.registrar.label}.")
+
+        except Exception as e:
+            _logger.exception(e)
+            return await status.error(f"Exception occurred while resolving NS records: {str(e)}")
 
         # Otherwise, things look hunky-dorey NS record wise.
-        _logger.info(f"NS records for {domain.name} match records from {dns_agent.label}.")
+        _logger.info(f"NS records do not match records from {dns_agent.label}.")
         return await status.success()
 
     async def check_domain_a_records(self, domain):
@@ -263,7 +270,7 @@ class Manager:
 
         hosting_ips = await self.fetch_hosting_ips_for_domain(domain)
         if len(hosting_ips) < 1:
-            return await status.error(f"No hosting IPs to set for '{domain.name}'.")
+            return await status.error(f"No hosting IPs found.")
 
         async def dns_a_record_already_set(a_record):
             dns_a = await fetch_records_from_dns(a_record, 'A')
@@ -273,9 +280,9 @@ class Manager:
         if domain.update_apex:
             a_record = domain.name
             if await dns_a_record_already_set(a_record):
-                _logger.debug(f"DNS apex record for '{domain.name}' with {dns_agent.label} resolves to expected hosting IPs.")
+                _logger.debug(f"DNS apex record with {dns_agent.label} resolves to expected hosting IPs.")
             else:
-                return status.error(f"DNS apex record for '{domain.name}' does not resolve to expected hosting IPs.")
+                return status.error(f"DNS apex record with {dns_agent.label} does not resolve to expected hosting IPs.")
 
         # Check/manage additional 'A' records as specified (typically 'www')
         if len(domain.update_a_records) > 0:
@@ -287,7 +294,7 @@ class Manager:
                     return await status.error(f"DNS A record for '{a_record}' does not resolve to expected hosting IPs.")
 
         # Otherwise, things look hunky-dorey A record wise.
-        _logger.info(f"A records for {domain.name} with {dns_agent.label} resolve to expected hosting IPs.")
+        _logger.info(f"A records resolve to expected hosting IPs.")
         return await status.success()
 
     async def apply_domain_a_records(self, domain):
@@ -304,7 +311,7 @@ class Manager:
             return len(dns_a) > 0 and set(dns_a) == set(hosting_ips)
 
         # Check/manage apex record
-        if False: #domain.update_apex:
+        if domain.update_apex:
             a_record = domain.name
             _logger.info(f"Updating DNS apex record '{a_record}' with {dns_agent.label}...")
             await dns_agent.create_new_a_rr(domain, a_record, hosting_ips)
@@ -416,13 +423,14 @@ class Manager:
             hosted_domains += await agent.get_hosted_domains()
         return hosted_domains
 
-    async def create_missing_dns_zone(self, domain, agent):
-        _logger.notice(f"Creating missing DNS zone for '{domain.name}' with {agent.label}...")
-        await agent.create_domain(domain.name)
+    async def create_missing_dns_zone(self, domain):
+        dns_agent = self.dns_agents[domain.dns.id]
+        _logger.info(f"Creating missing DNS zone for '{domain.name}' with {dns_agent.label}...")
+        await dns_agent.create_domain(domain.name)
 
     async def update_ns_records_with_registrar(self, domain, agent_ns):
         registrar_agent = self.registrar_agents[domain.registrar.id]
-        _logger.notice(f"Requesting update of NS records for '{domain.name}' via {registrar_agent.label}...")
+        _logger.info(f"Requesting update of NS records for '{domain.name}' via {registrar_agent.label}...")
         await registrar_agent.set_ns_records(domain, agent_ns)
 
     async def get_expected_aliases_for_site(self, site):
