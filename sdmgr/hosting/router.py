@@ -11,6 +11,14 @@ _logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+@router.get("/hosting", tags=["hosting"])
+async def list_hosting_providers(user = Depends(get_current_user)):
+    hosting_providers = await Hosting.objects.all()
+    return JSONResponse({
+        "hosting_providers": [await hosting_provider.serialize() for hosting_provider in hosting_providers]
+    })
+
+
 @router.get("/hosting/{id:int}/refresh", tags=["hosting"])
 async def refresh_hosting_provider(id: int, user = Depends(get_current_user)):
     """

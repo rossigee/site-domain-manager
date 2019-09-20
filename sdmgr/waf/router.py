@@ -11,6 +11,14 @@ _logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+@router.get("/waf", tags=["waf"])
+async def list_waf_providers(user = Depends(get_current_user)):
+    waf_providers = await WAFProvider.objects.all()
+    return JSONResponse({
+        "waf_providers": [await waf_provider.serialize() for waf_provider in waf_providers]
+    })
+
+
 @router.get("/waf/{id:int}/refresh", tags=["waf"])
 async def refresh_waf_provider(id: int, user = Depends(get_current_user)):
     """
