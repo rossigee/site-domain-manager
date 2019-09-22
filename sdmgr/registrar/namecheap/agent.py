@@ -82,18 +82,16 @@ class Namecheap(RegistrarAgent):
         while page_num < page_count:
             page_num += 1
             _logger.info(f"Fetching Namecheap domains page {page_num}")
-            try:
-                xmlstring = await get_page(page_num)
-                print(xmlstring)
-                root = ElementTree.fromstring(xmlstring)
-                for d in root.findall('.//{http://api.namecheap.com/xml.response}Domain'):
-                    dname = d.attrib['Name']
-                    domains[dname] = d.attrib
-                total_items = int(root.findall('.//{http://api.namecheap.com/xml.response}TotalItems')[0].text)
-                page_count = int((total_items - 1) / page_size) + 1
-            except Exception as e:
-                _logger.exception(e)
-                return
+            xmlstring = await get_page(page_num)
+            root = ElementTree.fromstring(xmlstring)
+            error = root.findall('.//{http://api.namecheap.com/xml.response}Error')
+            if len(error) > 0:
+                raise Exception(error[0].text)
+            for d in root.findall('.//{http://api.namecheap.com/xml.response}Domain'):
+                dname = d.attrib['Name']
+                domains[dname] = d.attrib
+            total_items = int(root.findall('.//{http://api.namecheap.com/xml.response}TotalItems')[0].text)
+            page_count = int((total_items - 1) / page_size) + 1
 
         self.domains = domains
 
