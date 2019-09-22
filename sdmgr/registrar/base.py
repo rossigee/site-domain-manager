@@ -54,8 +54,9 @@ class RegistrarAgent(BaseAgent):
                     if domain.registrar.id == registrar.id:
                         _logger.debug(f"Found {domainname}.")
                     else:
-                        await domain.update(registrar = registrar.id)
                         _logger.info(f"Reassociating '{domainname}' with registrar '{registrar.label}'.")
+                        await domain.update(registrar = registrar)
+
                 except orm.exceptions.NoMatch:
                     domain = await Domain.objects.create(
                         name = domainname,
