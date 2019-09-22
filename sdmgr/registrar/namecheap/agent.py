@@ -119,9 +119,9 @@ class Namecheap(RegistrarAgent):
         domain = self.domains[domainname]
         return {
             'name': domainname,
-            'summary': domain['status'] or "N/A",
-            'expiry_date': domain['expiry_date'],
-            'auto_renew': domain['auto_renew'],
+            'summary': 'Active' if domain['IsExpired'] == 'false' else 'Expired',
+            'expiry_date': domain['Expires'],
+            'auto_renew': domain['AutoRenew'] == 'true',
         }
 
     async def set_ns_records(self, domain, nameservers):
