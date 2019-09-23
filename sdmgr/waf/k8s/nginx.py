@@ -32,11 +32,11 @@ http {
 
     server {
       listen       8080;
-      server_name  {{aliases}};
       location / {
         proxy_pass https://{{hostingip1}}/;
         proxy_redirect     off;
         proxy_set_header   Host $host;
+        proxy_set_header X-WAF-Real-Ip $http_x_real_ip;
       }
     }
 }
