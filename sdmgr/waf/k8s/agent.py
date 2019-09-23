@@ -203,14 +203,14 @@ class K8S(WAFProviderAgent):
                     spec = kubernetes.client.V1beta2DaemonSetSpec(
                         selector = kubernetes.client.V1LabelSelector(
                             match_labels = {
-                                "workload": f"proxy-{siteid}"
+                                "app": f"proxy-{siteid}"
                             }
                         ),
                         template = kubernetes.client.V1PodTemplateSpec(
                             metadata = kubernetes.client.V1ObjectMeta(
                                 #name = hostname,
                                 labels = {
-                                    "workload": f"proxy-{siteid}"
+                                    "app": f"proxy-{siteid}"
                                 }
                             ),
                             spec = kubernetes.client.V1PodSpec(
@@ -260,7 +260,7 @@ class K8S(WAFProviderAgent):
                             )
                         ],
                         selector = {
-                            "workload": f"proxy-{siteid}"
+                            "app": f"proxy-{siteid}"
                         }
                     )
                 )
