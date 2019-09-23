@@ -11,6 +11,20 @@ _logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+from pydantic import BaseModel
+
+class DomainUpdateForm(BaseModel):
+    name: str
+    registrar: int
+    dns: int
+    site: int
+    waf: int
+    #update_apex: bool
+    #update_a_records: str
+    google_site_verification: str
+    active: bool
+
+
 @router.get("/domains", tags=["domains"])
 async def list_domains(name = None, user = Depends(get_current_user)):
     if name:
@@ -28,6 +42,63 @@ async def get_domain(id: int, user = Depends(get_current_user)):
     domain = await Domain.objects.get(id=id)
     _logger.info(f"User '{user.username}' fetching domain '{domain.name}'.")
     return JSONResponse({
+        "domain": await domain.serialize()
+    })
+
+# NOTE: New domains should be created by importing fresh data to a registrar agent
+#@router.post("/domains", tags=["domains"])
+#async def add_domain(domain, user = Depends(get_current_user)):
+#    _logger.info(f"User '{user.username}' adding new domain '{domain.name}'.")
+#    await Domain.objects.create(domain)
+#    return JSONResponse(await domain.serialize())
+
+@router.post("/domains/{id:int}", tags=["domains"])
+async def update_domain(id: int, domain_in: DomainUpdateForm, user = Depends(get_current_user)):
+    """
+    Update editable attributes of a domain.
+    """
+    domain = await Domain.objects.get(id=id)
+    _logger.info(f"User '{user.username}' updating domain '{domain.name}'.")
+
+    update_kwargs = {}
+    notices = []
+    actions = []
+    if domain.registrar.id != domain_in.registrar:
+        update_kwargs['registrar'] = await Registrar.objects.get(id = domain_in.registrar)
+        notices.append(f"User '{user.username}' updated registrar provider to {update_kwargs['registrar'].label} for domain {domain.name}.")
+        actions.append(f"Updated registrar provider to {update_kwargs['registrar'].label}")
+    if domain.dns.id != domain_in.dns:
+        update_kwargs['dns'] = await DNSProvider.objects.get(id = domain_in.dns)
+        notices.append(f"User '{user.username}' updated DNS provider to {update_kwargs['dns'].label} for domain {domain.name}.")
+        actions.append(f"Updated DNS provider to {update_kwargs['dns'].label}")
+    if domain.site.id != domain_in.site:
+        update_kwargs['site'] = await Site.objects.get(id = domain_in.site)
+        notices.append(f"User '{user.username}' updated site to {update_kwargs['site'].label} for domain {domain.name}.")
+        actions.append(f"Updated site to {update_kwargs['site'].label}")
+    if domain.waf.id != domain_in.waf:
+        update_kwargs['waf'] = await WAFProvider.objects.get(id = domain_in.waf)
+        notices.append(f"User '{user.username}' updated WAF provider to {update_kwargs['waf'].label} for domain {domain.name}.")
+        actions.append(f"Updated WAF provider to {update_kwargs['waf'].label}")
+    if domain.google_site_verification != domain_in.google_site_verification:
+        update_kwargs['google_site_verification'] = domain_in.google_site_verification
+        notices.append(f"User '{user.username}' updated GSV to {domain_in.google_site_verification} for domain {domain.name}.")
+        actions.append(f"Updated GSV to {domain_in.google_site_verification}")
+    if domain.active != domain_in.active:
+        update_kwargs['active'] = domain_in.active
+        notices.append(f"User '{user.username}' updated active flag to {domain_in.active} for domain {domain.name}.")
+        actions.append(f"Updated active flag to {domain_in.active}")
+
+    if len(actions) > 0:
+        try:
+            await domain.update(**update_kwargs)
+            for notice in notices:
+                _logger.info(notice)
+        except Exception as e:
+            _logger.exception(e)
+
+    return JSONResponse({
+        "status": "ok",
+        "actions": actions,
         "domain": await domain.serialize()
     })
 
@@ -71,46 +142,6 @@ async def apply_domain(id: int, user = Depends(get_current_user)):
     checks = StatusCheck.objects.filter(_check_id__contains=f"domain:{domain.name}:")
     return JSONResponse({
         "checks": [await check.serialize() for check in await checks.all()]
-    })
-
-# NOTE: New domains should be created by importing fresh data to a registrar agent
-#@router.post("/domains", tags=["domains"])
-#async def add_domain(domain, user = Depends(get_current_user)):
-#    _logger.info(f"User '{user.username}' adding new domain '{domain.name}'.")
-#    await Domain.objects.create(domain)
-#    return JSONResponse(await domain.serialize())
-
-@router.put("/domains/{id:int}", tags=["domains"])
-async def update_domain(id: int, domain, user = Depends(get_current_user)):
-    """
-    Update editable attributes of a domain.
-    """
-    _logger.info(f"User '{user.username}' updating domain '{domain.name}'.")
-    domain = await Domain.objects.get(id = id)
-
-    update_kwargs = {}
-    notices = []
-    actions = []
-    if domain.google_site_verification != newdomain.google_site_verification:
-        update_kwargs['google_site_verification'] = newdomain.google_site_verification
-        notices.append("User '{request.user.name}' updated GSV to {newdomain.google_site_verification} for domain {domain.name}.")
-        actions.append("Updated GSV to {newdomain.google_site_verification}")
-    if domain.active != newdomain.active:
-        update_kwargs['active'] = newdomain.active
-        notices.append("User '{request.user.name}' updated active flag to {newdomain.active} for domain {domain.name}.")
-        actions.append("Updated active flag to {newdomain.active}")
-
-    if len(actions) > 0:
-        try:
-            await domain.update(**update_kwargs)
-            for notice in notices:
-                _logger.info(notice)
-        except Exception as e:
-            _logger.exception(e)
-
-    return JSONResponse({
-        "status": "ok",
-        "actions": actions
     })
 
 @router.get("/domains/{id:int}/check/ns", tags=["domains"])
