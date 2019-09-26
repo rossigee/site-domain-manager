@@ -1,4 +1,4 @@
-from sdmgr.db import Registrar, Domain
+from sdmgr.db import Registrar, RegistrarNotifier, Domain
 from sdmgr.agent import BaseAgent
 
 import logging
@@ -67,9 +67,11 @@ class RegistrarAgent(BaseAgent):
             _logger.exception(e)
 
     async def set_ns_records(self, domain, nameservers):
-        # TODO: Abstract notification service away at some point. For now,
-        # where registrar's entries can't be managed via API, tell an admin.
-        try:
-            await agent.notify_registrar_ns_update(self, domain, nameservers)
-        except Exception as e:
-            _logger.exception(e)
+        registrar_notifiers = RegistrarNotifier.objects.filter(registrar = domain.registrar)
+        notifiers = [rn.notifier for rn in await registrar_notifiers.all()]
+        for notifier in notifiers:
+            try:
+                agent = self.manager.notifiers[notifier.id]
+                await agent.notify_registrar_ns_update(self, domain, nameservers)
+            except Exception as e:
+                _logger.exception(e)

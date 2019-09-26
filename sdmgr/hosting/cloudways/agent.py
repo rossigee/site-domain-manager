@@ -27,9 +27,9 @@ class Cloudways(HostingAgent):
         },
     ]
 
-    def __init__(self, data):
+    def __init__(self, data, manager):
         _logger.info(f"Loading Cloudways hosting provider agent (id: {data.id}): {data.label})")
-        HostingAgent.__init__(self, data)
+        HostingAgent.__init__(self, data, manager)
 
         self.headers = None
         self.token_expires = None

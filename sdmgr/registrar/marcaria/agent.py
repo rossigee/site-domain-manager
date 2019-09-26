@@ -10,9 +10,9 @@ import orm
 class Marcaria(RegistrarAgent):
     _label_ = "Marcaria"
 
-    def __init__(self, data):
+    def __init__(self, data, manager):
         _logger.info(f"Loading Marcaria registrar agent (id: {data.id}): {data.label})")
-        RegistrarAgent.__init__(self, data)
+        RegistrarAgent.__init__(self, data, manager)
 
         self.domains = {}
         self.registrar = data

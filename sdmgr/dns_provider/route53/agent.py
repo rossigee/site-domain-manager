@@ -23,9 +23,9 @@ class Route53(DNSProviderAgent):
         },
     ]
 
-    def __init__(self, data):
+    def __init__(self, data, manager):
         _logger.info(f"Loading Route53 DNS provider agent (id: {data.id}): {data.label})")
-        DNSProviderAgent.__init__(self, data)
+        DNSProviderAgent.__init__(self, data, manager)
 
         self.domains = {}
         self.zone_ids_cache = {}

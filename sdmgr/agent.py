@@ -11,13 +11,14 @@ _logger = logging.getLogger(__name__)
 class BaseAgent():
     _settings_ = []
 
-    def __init__(self, data):
+    def __init__(self, data, manager):
         self.id = data.id
         self.label = data.label
         self.config_id = f"{self._agent_type_}:{data.id}"
         self.config = {}
         self.state = {}
         self.updated_time = None
+        self.manager = manager
 
     def _config(self, key: str):
         return self.config[key]

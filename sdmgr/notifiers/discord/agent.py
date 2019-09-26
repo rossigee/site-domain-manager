@@ -17,9 +17,9 @@ class Discord(NotifierAgent):
         },
     ]
 
-    def __init__(self, data):
+    def __init__(self, data, manager):
         _logger.info(f"Loading Discord notifier agent (id: {data.id}): {data.label})")
-        NotifierAgent.__init__(self, data)
+        NotifierAgent.__init__(self, data, manager)
 
     async def notify_registrar_ns_update(self, registrar, domain, nameservers):
         content = f"Please update NS records for domain '{domain.name}' to: "
@@ -29,7 +29,8 @@ class Discord(NotifierAgent):
             'content': content
         }
         async with aiohttp.ClientSession() as session:
-            async with session.post(self.url, data=data) as response:
+            webhook_url = self._config("webhook_url")
+            async with session.post(webhook_url, data=data) as response:
                 output = await response.text()
                 if response.status != 204:
                     _logger.error(f"Unexpected response from Discord API ({response.status}): {output}")

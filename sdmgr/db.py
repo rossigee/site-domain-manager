@@ -214,6 +214,16 @@ class Notifier(orm.Model):
         return r
 
 
+class RegistrarNotifier(orm.Model):
+    __tablename__ = "registrar_notifiers"
+    __database__ = database
+    __metadata__ = metadata
+
+    id = orm.Integer(primary_key=True)
+    registrar = orm.ForeignKey(Registrar)
+    notifier = orm.ForeignKey(Notifier)
+
+
 # Create the database
 engine = sqlalchemy.create_engine(str(database.url))
 metadata.create_all(engine)

@@ -30,9 +30,9 @@ class Namecheap(RegistrarAgent):
         },
     ]
 
-    def __init__(self, data):
+    def __init__(self, data, manager):
         _logger.info(f"Loading Namecheap registrar agent (id: {data.id}): {data.label})")
-        RegistrarAgent.__init__(self, data)
+        RegistrarAgent.__init__(self, data, manager)
 
         self.domains = {}
         self.registrar = data

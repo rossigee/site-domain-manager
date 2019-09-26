@@ -17,9 +17,17 @@ _logger = logging.getLogger(__name__)
 
 
 async def fetch_records_from_dns(domain, type):
-    resolver = aiodns.DNSResolver()
-    rr = await resolver.query(domain, type)
-    return [x.host for x in rr]
+    try:
+        resolver = aiodns.DNSResolver()
+        rr = await resolver.query(domain, type)
+        return [x.host for x in rr]
+    except aiodns.error.DNSError as e:
+        _logger.exception(e)
+        return []
+
+async def dns_a_record_already_set(a_record):
+    dns_a = await fetch_records_from_dns(a_record, 'A')
+    return len(dns_a) > 0 and set(dns_a) == set(hosting_ips)
 
 
 class ManagerStatusCheck:
@@ -93,7 +101,7 @@ class Manager:
         def _init_instance(module_name):
             agent_module = importlib.import_module(module_name)
             agent_class = getattr(agent_module, "Agent")
-            return agent_class(agentdata)
+            return agent_class(agentdata, self)
 
         coros = []
 
@@ -246,11 +254,10 @@ class Manager:
 
         except DomainNotHostedException as dnhe:
             await self.create_missing_dns_zone(domain)
-            return await status.error(f"Awaiting propogation of NS record change.")
 
         except Exception as e:
             _logger.exception(e)
-            return await status.error(f"Exception occurred while checking intended NS records: {str(e)}")
+            return await status.error(f"Exception occurred while checking NS records with DNS agent: {str(e)}")
 
         # What do public nameservers tell us the NS are currently set to?
         try:
@@ -282,14 +289,6 @@ class Manager:
         if len(hosting_ips) < 1:
             return await status.error(f"No hosting IPs found.")
 
-        async def dns_a_record_already_set(a_record):
-            try:
-                dns_a = await fetch_records_from_dns(a_record, 'A')
-                return len(dns_a) > 0 and set(dns_a) == set(hosting_ips)
-            except aiodns.error.DNSError as e:
-                _logger.exception(e)
-                return False
-
         # Check/manage apex record
         if domain.update_apex:
             a_record = domain.name
@@ -319,10 +318,6 @@ class Manager:
         hosting_ips = await self.fetch_hosting_ips_for_domain(domain)
         if len(hosting_ips) < 1:
             return f"No hosting IPs found."
-
-        async def dns_a_record_already_set(a_record):
-            dns_a = await fetch_records_from_dns(a_record, 'A')
-            return len(dns_a) > 0 and set(dns_a) == set(hosting_ips)
 
         # Check/manage apex record
         if domain.update_apex:

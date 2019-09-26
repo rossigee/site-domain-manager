@@ -36,9 +36,9 @@ class K8S(WAFProviderAgent):
         },
     ]
 
-    def __init__(self, data):
+    def __init__(self, data, manager):
         _logger.info(f"Loading Kubernetes WAF provider agent (id: {data.id}): {data.label})")
-        WAFProviderAgent.__init__(self, data)
+        WAFProviderAgent.__init__(self, data, manager)
 
     async def start(self):
         await WAFProviderAgent.start(self)
