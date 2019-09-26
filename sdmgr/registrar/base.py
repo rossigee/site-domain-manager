@@ -55,7 +55,12 @@ class RegistrarAgent(BaseAgent):
                         _logger.debug(f"Found {domainname}.")
                     else:
                         _logger.info(f"Reassociating '{domainname}' with registrar '{registrar.label}'.")
-                        await domain.update(registrar = registrar)
+                        await domain.registrar.load()
+                        old_registrar_agent = self.manager.registrar_agents[domain.registrar.id]
+                        await old_registrar_agent.notify_domain_transfer_out(domain, domain.registrar, registrar)
+                        new_registrar_agent = self.manager.registrar_agents[registrar.id]
+                        await new_registrar_agent.notify_domain_transfer_in(domain, domain.registrar, registrar)
+                        #await domain.update(registrar = registrar)
 
                 except orm.exceptions.NoMatch:
                     domain = await Domain.objects.create(
@@ -73,5 +78,25 @@ class RegistrarAgent(BaseAgent):
             try:
                 agent = self.manager.notifiers[notifier.id]
                 await agent.notify_registrar_ns_update(self, domain, nameservers)
+            except Exception as e:
+                _logger.exception(e)
+
+    async def notify_domain_transfer_out(self, domain, old_registrar, new_registrar):
+        registrar_notifiers = RegistrarNotifier.objects.filter(registrar = old_registrar)
+        notifiers = [rn.notifier for rn in await registrar_notifiers.all()]
+        for notifier in notifiers:
+            try:
+                agent = self.manager.notifiers[notifier.id]
+                await agent.notify_domain_transfer_out(domain, old_registrar, new_registrar)
+            except Exception as e:
+                _logger.exception(e)
+
+    async def notify_domain_transfer_in(self, domain, old_registrar, new_registrar):
+        registrar_notifiers = RegistrarNotifier.objects.filter(registrar = new_registrar)
+        notifiers = [rn.notifier for rn in await registrar_notifiers.all()]
+        for notifier in notifiers:
+            try:
+                agent = self.manager.notifiers[notifier.id]
+                await agent.notify_domain_transfer_in(domain, old_registrar, new_registrar)
             except Exception as e:
                 _logger.exception(e)

@@ -66,6 +66,18 @@ class SMTP(NotifierAgent):
 
         await self._send(subject, content)
 
+    async def notify_domain_transfer_out(self, domain, old_registrar, new_registrar):
+        subject = f"Domain transfer notification for '{domain.name}'"
+        content = f"Domain '{domain.name}' has been transfered out of '{old_registrar.label}' to '{new_registrar.label}'."
+
+        await self._send(subject, content)
+
+    async def notify_domain_transfer_in(self, domain, old_registrar, new_registrar):
+        subject = f"Domain transfer notification for '{domain.name}'"
+        content = f"Domain '{domain.name}' has been transfered in from '{old_registrar.label}' to '{new_registrar.label}'."
+
+        await self._send(subject, content)
+
     async def _send(self, subject, content):
         smtp_host = self._config("smtp_host")
         smtp_port = int(self._config("smtp_port"))
