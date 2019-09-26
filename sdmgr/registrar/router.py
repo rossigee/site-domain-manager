@@ -82,7 +82,7 @@ async def update_registrar_by_csv_file(id: int, csvfile: bytes = File(...), user
         return JSONResponse({
             "status":"error",
             "error": e.__str__()
-        }, status_code=400)
+        }, status_code=500)
 
 @router.post("/registrars/{id:int}/jsonfile", tags=["registrars"])
 async def update_registrar_by_json_file(id: int, jsonfile: bytes = File(...), user = Depends(get_current_user)):
@@ -100,7 +100,7 @@ async def update_registrar_by_json_file(id: int, jsonfile: bytes = File(...), us
         return JSONResponse({
             "status":"error",
             "error": e.__str__()
-        }, status_code=400)
+        }, status_code=500)
 
 @router.get("/registrars/{id:int}/refresh", tags=["registrars"])
 async def refresh_registrar_provider(id: int, user = Depends(get_current_user)):
@@ -118,7 +118,7 @@ async def refresh_registrar_provider(id: int, user = Depends(get_current_user)):
         return JSONResponse({
             "status":"error",
             "error": e.__str__()
-        }, status_code=400)
+        }, status_code=500)
 
 @router.get("/registrars/{id:int}/domains/{domainname}/status", tags=["registrars"])
 async def get_registrar_status_for_domain(id: int, domainname, user = Depends(get_current_user)):
