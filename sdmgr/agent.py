@@ -32,8 +32,12 @@ class BaseAgent():
 # Ensure all expected modules are imported/registered...
 async def load_and_register_agents():
     for module_name in settings.agents_to_import:
-        _logger.info(f"Loading agent module '{module_name}'...")
-        agent_module = importlib.import_module(module_name)
+        try:
+            agent_module = importlib.import_module(module_name)
+            _logger.info(f"Loaded agent module '{module_name}'...")
+        except Exception as e:
+            _logger.exception(e)
+            raise Exception(f"Failed to load module '{module_name}': " + str(e))
 
 # Provide a list of all available agents and their settings
 async def fetch_available_agents_and_settings():
@@ -41,6 +45,7 @@ async def fetch_available_agents_and_settings():
     from sdmgr.dns_provider import available_agents as dns_agents
     from sdmgr.waf import available_agents as waf_agents
     from sdmgr.sites import available_agents as hosting_agents
+    from sdmgr.notifiers import available_agents as notifier_agents
 
     def agent_info(cls):
         return {
@@ -54,4 +59,5 @@ async def fetch_available_agents_and_settings():
         'dns': [agent_info(cls) for cls in dns_agents],
         'waf': [agent_info(cls) for cls in waf_agents],
         'hosting': [agent_info(cls) for cls in hosting_agents],
+        'notifiers': [agent_info(cls) for cls in notifier_agents],
     }
