@@ -13,7 +13,7 @@ if TESTING:
 
 # Modules to import (and register) agents from
 agents_to_import = [
-    "sdmgr.hosting",
+    #"sdmgr.hosting",
     "sdmgr.registrar.marcaria",
     "sdmgr.registrar.uniteddomains",
     "sdmgr.registrar.namecheap",
@@ -22,4 +22,6 @@ agents_to_import = [
     #"sdmgr.waf.cloudflare",
     "sdmgr.dns_provider.route53",
     #"sdmgr.dns_provider.cloudflare",
+    "sdmgr.notifiers.discord",
+    "sdmgr.notifiers.smtp",
 ]

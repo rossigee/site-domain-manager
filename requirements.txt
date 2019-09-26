@@ -11,6 +11,7 @@ aiohttp
 aiomysql
 aiosqlite
 aiodns
+aiosmtplib
 python-multipart
 python-ldap
 mysqlclient

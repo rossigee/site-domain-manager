@@ -70,7 +70,6 @@ class RegistrarAgent(BaseAgent):
         # TODO: Abstract notification service away at some point. For now,
         # where registrar's entries can't be managed via API, tell an admin.
         try:
-            from sdmgr.discord import Discord
-            await Discord().notify_registrar_ns_update(self, domain, nameservers)
+            await agent.notify_registrar_ns_update(self, domain, nameservers)
         except Exception as e:
             _logger.exception(e)

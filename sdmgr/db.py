@@ -192,6 +192,28 @@ class Domain(orm.Model):
         return r
 
 
+class Notifier(orm.Model):
+    __tablename__ = "notifiers"
+    __database__ = database
+    __metadata__ = metadata
+
+    id = orm.Integer(primary_key=True)
+    label = orm.String(max_length=100, unique=True)
+    agent_module = orm.String(max_length=100)
+    state = orm.JSON()
+    active = orm.Boolean(default=True)
+    updated_time = orm.DateTime()
+
+    async def serialize(self, full = False):
+        await self.load()
+        r = {
+            "id": self.id,
+            "label": self.label,
+            "updated_time": jsonable_encoder(self.updated_time)
+        }
+        return r
+
+
 # Create the database
 engine = sqlalchemy.create_engine(str(database.url))
 metadata.create_all(engine)

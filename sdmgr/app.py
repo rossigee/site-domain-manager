@@ -23,6 +23,7 @@ from sdmgr.registrar.router import router as registrar_router
 from sdmgr.dns_provider.router import router as dns_router
 from sdmgr.hosting.router import router as hosting_router
 from sdmgr.waf.router import router as waf_router
+from sdmgr.notifiers.router import router as notifiers_router
 from sdmgr.sites.router import router as sites_router
 from sdmgr.domains.router import router as domains_router
 
@@ -108,6 +109,7 @@ app.include_router(registrar_router)
 app.include_router(dns_router)
 app.include_router(waf_router)
 app.include_router(hosting_router)
+app.include_router(notifiers_router)
 app.include_router(sites_router)
 app.include_router(domains_router)
 
