@@ -110,6 +110,7 @@ async def get_domain_checks(id: int, user = Depends(get_current_user)):
     domain = await Domain.objects.get(id=id)
     _logger.info(f"User '{user.username}' fetching domain checks for '{domain.name}'.")
     # A '__startswith' filter would be better...
+    # (https://github.com/encode/orm/issues/49)
     checks = StatusCheck.objects.filter(_check_id__contains=f"domain:{domain.name}:")
     return JSONResponse({
         "checks": [await check.serialize() for check in await checks.all()]
@@ -122,7 +123,7 @@ async def check_domain(id: int, user = Depends(get_current_user)):
     """
     domain = await Domain.objects.get(id=id)
     _logger.info(f"User '{user.username}' restarting domain checks for '{domain.name}'.")
-    # TODO make request asyncronous...
+    # TODO make request asynchronous...
     await m.check_domain(domain)
     checks = StatusCheck.objects.filter(_check_id__contains=f"domain:{domain.name}:")
     return JSONResponse({
@@ -137,10 +138,11 @@ async def apply_domain(id: int, user = Depends(get_current_user)):
     domain = await Domain.objects.get(id=id)
     _logger.info(f"User '{user.username}' applying domain configuration for '{domain.name}'.")
     await m.apply_domain(domain)
-    # TODO make request asyncronous...
-    await m.check_domain(domain)
+    # TODO make request asynchronous...
+    status = await m.check_domain(domain)
     checks = StatusCheck.objects.filter(_check_id__contains=f"domain:{domain.name}:")
     return JSONResponse({
+        "status": status.serialize(),
         "checks": [await check.serialize() for check in await checks.all()]
     })
 
@@ -150,24 +152,13 @@ async def check_domain_ns(id: int, user = Depends(get_current_user)):
     Check the DNS NS records for this domain.
     """
     domain = await Domain.objects.get(id = id)
+    _logger.info(f"User '{user.username}' checking NS records for '{domain.name}'.")
+    # TODO make request asynchronous...
     status = await m.check_domain_ns_records(domain)
+    checks = StatusCheck.objects.filter(_check_id__contains=f"domain:{domain.name}:")
     return JSONResponse({
-        "domain": {
-            "id": id,
-            "name": domain.name
-        },
-        "status": status
-    })
-
-@router.get("/domains/{id:int}/lookup/ns", tags=["domains"])
-async def lookup_domain_ns(id: int, user = Depends(get_current_user)):
-    """
-    Return the results on an NS lookup to obtain the nameservers in use by the global DNS system. This allows the caller to compare Used to compare with the current status as of the domain's name servers, including their main NS records.
-    """
-    agent = m.dns_agents[id]
-    status = await agent.get_status_for_domain(domainname)
-    return JSONResponse({
-        "status": status
+        "status": await status.serialize(),
+        "checks": [await check.serialize() for check in await checks.all()]
     })
 
 @router.get("/domains/{id:int}/check/a", tags=["domains"])
@@ -176,13 +167,13 @@ async def check_domain_a(id: int, user = Depends(get_current_user)):
     Check the DNS A records for this domain.
     """
     domain = await Domain.objects.get(id = id)
+    _logger.info(f"User '{user.username}' checking A records for '{domain.name}'.")
+    # TODO make request asynchronous...
     status = await m.check_domain_a_records(domain)
+    checks = StatusCheck.objects.filter(_check_id__contains=f"domain:{domain.name}:")
     return JSONResponse({
-        "domain": {
-            "id": id,
-            "name": domain.name
-        },
-        "status": status
+        "status": await status.serialize(),
+        "checks": [await check.serialize() for check in await checks.all()]
     })
 
 @router.get("/domains/{id:int}/check/gsv", tags=["domains"], summary="Check Domain Google Site Verification record")
@@ -192,13 +183,13 @@ async def check_domain_gsv(id: int, user = Depends(get_current_user)):
     - **id**: domain id
     """
     domain = await Domain.objects.get(id = id)
+    _logger.info(f"User '{user.username}' checking Google Site Verification TXT records for '{domain.name}'.")
+    # TODO make request asynchronous...
     status = await m.check_domain_google_site_verification(domain)
+    checks = StatusCheck.objects.filter(_check_id__contains=f"domain:{domain.name}:")
     return JSONResponse({
-        "domain": {
-            "id": id,
-            "name": domain.name
-        },
-        "status": status
+        "status": await status.serialize(),
+        "checks": [await check.serialize() for check in await checks.all()]
     })
 
 @router.get("/domains/{id:int}/check/waf", tags=["domains"])

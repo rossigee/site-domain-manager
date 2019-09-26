@@ -37,13 +37,13 @@ class ManagerStatusCheck:
         self.endTime = datetime.datetime.now()
         self.success = True
         self.output = output
-        await self._finish()
+        return await self._finish()
 
     async def error(self, output):
         self.endTime = datetime.datetime.now()
         self.success = False
         self.output = output
-        await self._finish()
+        return await self._finish()
 
     async def _finish(self):
         # If no last status for this check, create it
@@ -72,6 +72,8 @@ class ManagerStatusCheck:
                 output = self.output
             )
 
+        return last_status
+
     # TODO: Ensure this is pushed to ElasticSearch and/or Discord somehow
     def audit(self, last_status):
         _logger.info(f"Status for check '{self._check_id}' now '{self.output}'.")
@@ -83,6 +85,7 @@ class Manager:
         self.dns_agents = {}
         self.hosting_agents = {}
         self.waf_agents = {}
+        self.notifiers = {}
 
         # TODO: Connect to Google to fetch/verify the GSV codes via API?
 
@@ -121,6 +124,13 @@ class Manager:
             agent = _init_instance(agentdata.agent_module)
             coros.append(agent.start())
             self.waf_agents[agent.id] = agent
+
+        _logger.debug("Initialising notifier agents...")
+        agents = await Notifier.objects.filter(active=True).all()
+        for agentdata in agents:
+            agent = _init_instance(agentdata.agent_module)
+            coros.append(agent.start())
+            self.notifiers[agent.id] = agent
 
         _logger.info(f"Starting {len(coros)} agents...")
         results = await asyncio.gather(*coros)
@@ -207,7 +217,7 @@ class Manager:
 
         tasks = []
 
-        #tasks.append(asyncio.create_task(self.apply_domain_ns_records(domain)))
+        tasks.append(asyncio.create_task(self.apply_domain_ns_records(domain)))
         tasks.append(asyncio.create_task(self.apply_domain_a_records(domain)))
         # [TODO] Other checks...
 
@@ -259,7 +269,7 @@ class Manager:
             return await status.error(f"Exception occurred while resolving NS records: {str(e)}")
 
         # Otherwise, things look hunky-dorey NS record wise.
-        _logger.info(f"NS records do not match records from {dns_agent.label}.")
+        _logger.info(f"NS records match records from {dns_agent.label}.")
         return await status.success()
 
     async def check_domain_a_records(self, domain):
@@ -273,8 +283,12 @@ class Manager:
             return await status.error(f"No hosting IPs found.")
 
         async def dns_a_record_already_set(a_record):
-            dns_a = await fetch_records_from_dns(a_record, 'A')
-            return len(dns_a) > 0 and set(dns_a) == set(hosting_ips)
+            try:
+                dns_a = await fetch_records_from_dns(a_record, 'A')
+                return len(dns_a) > 0 and set(dns_a) == set(hosting_ips)
+            except aiodns.error.DNSError as e:
+                _logger.exception(e)
+                return False
 
         # Check/manage apex record
         if domain.update_apex:
@@ -282,7 +296,7 @@ class Manager:
             if await dns_a_record_already_set(a_record):
                 _logger.debug(f"DNS apex record with {dns_agent.label} resolves to expected hosting IPs.")
             else:
-                return status.error(f"DNS apex record with {dns_agent.label} does not resolve to expected hosting IPs.")
+                return await status.error(f"DNS apex record with {dns_agent.label} does not resolve to expected hosting IPs.")
 
         # Check/manage additional 'A' records as specified (typically 'www')
         if len(domain.update_a_records) > 0:
