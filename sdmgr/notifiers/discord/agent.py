@@ -36,7 +36,7 @@ class Discord(NotifierAgent):
                     _logger.error(f"Unexpected response from Discord API ({response.status}): {output}")
 
     async def notify_domain_transfer_out(self, domain, old_registrar, new_registrar):
-        content = f"Domain `{domain.name}`` has been transfered out of '{old_registrar.label}' to '{new_registrar.label}'."
+        content = f"Domain `{domain.name}` has been transfered out of '{old_registrar.label}' to '{new_registrar.label}'."
         data = {
             'username': old_registrar.label,
             'content': content
