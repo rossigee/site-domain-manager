@@ -5,6 +5,7 @@ _logger = logging.getLogger(__name__)
 
 import os
 import aiohttp
+import asyncio
 
 
 class Discord(NotifierAgent):
@@ -30,10 +31,19 @@ class Discord(NotifierAgent):
         }
         async with aiohttp.ClientSession() as session:
             webhook_url = self._config("webhook_url")
-            async with session.post(webhook_url, data=data) as response:
-                output = await response.text()
-                if response.status != 204:
-                    _logger.error(f"Unexpected response from Discord API ({response.status}): {output}")
+            while True:
+                async with session.post(webhook_url, data=data) as response:
+                    output = await response.text()
+                    if response.status == 429:
+                        # Handle rate limitting
+                        r = json.loads(output)
+                        waitfor = (int(int(r['retry_after']) / 1000) * 1000) + 1
+                        _logger.warning(f"Rate limit from Discord API. Retry after {waitfor} secs.")
+                        asyncio.sleep(waitfor)
+                        continue
+                    if response.status != 204:
+                        _logger.error(f"Unexpected response from Discord API ({response.status}): {output}")
+                    break
 
     async def notify_domain_transfer_out(self, domain, old_registrar, new_registrar):
         content = f"Domain `{domain.name}` has been transfered out of '{old_registrar.label}' to '{new_registrar.label}'."
