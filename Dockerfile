@@ -9,7 +9,6 @@ RUN apk -U add \
 
 # Add python deps so (re)building source in next stage is rapid
 RUN pip3 install \
-    requests \
     gunicorn \
     uvicorn \
     starlette \
