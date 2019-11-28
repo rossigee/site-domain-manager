@@ -56,11 +56,21 @@ class RegistrarAgent(BaseAgent):
                     else:
                         _logger.info(f"Reassociating '{domainname}' with registrar '{registrar.label}'.")
                         await domain.registrar.load()
-                        old_registrar_agent = self.manager.registrar_agents[domain.registrar.id]
-                        await old_registrar_agent.notify_domain_transfer_out(domain, domain.registrar, registrar)
-                        new_registrar_agent = self.manager.registrar_agents[registrar.id]
-                        await new_registrar_agent.notify_domain_transfer_in(domain, domain.registrar, registrar)
-                        #await domain.update(registrar = registrar)
+                        await domain.update(registrar = registrar)
+                        try:
+                            old_registrar_agent = self.manager.registrar_agents[domain.registrar.id]
+                            await old_registrar_agent.notify_domain_transfer_out(domain, domain.registrar, registrar)
+                        except KeyError as e:
+                            pass
+                        except Exception as e:
+                            _logger.exception(e)
+                        try:
+                            new_registrar_agent = self.manager.registrar_agents[registrar.id]
+                            await new_registrar_agent.notify_domain_transfer_in(domain, domain.registrar, registrar)
+                        except KeyError as e:
+                            pass
+                        except Exception as e:
+                            _logger.exception(e)
 
                 except orm.exceptions.NoMatch:
                     domain = await Domain.objects.create(
@@ -78,6 +88,8 @@ class RegistrarAgent(BaseAgent):
             try:
                 agent = self.manager.notifiers[notifier.id]
                 await agent.notify_registrar_ns_update(self, domain, nameservers)
+            except KeyError as e:
+                pass
             except Exception as e:
                 _logger.exception(e)
 
@@ -88,6 +100,8 @@ class RegistrarAgent(BaseAgent):
             try:
                 agent = self.manager.notifiers[notifier.id]
                 await agent.notify_domain_transfer_out(domain, old_registrar, new_registrar)
+            except KeyError as e:
+                pass
             except Exception as e:
                 _logger.exception(e)
 
@@ -98,5 +112,7 @@ class RegistrarAgent(BaseAgent):
             try:
                 agent = self.manager.notifiers[notifier.id]
                 await agent.notify_domain_transfer_in(domain, old_registrar, new_registrar)
+            except KeyError as e:
+                pass
             except Exception as e:
                 _logger.exception(e)

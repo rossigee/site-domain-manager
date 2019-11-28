@@ -145,6 +145,7 @@ class Namecheap(RegistrarAgent):
                 xmlstring = await response.text()
 
         try:
+            root = ElementTree.fromstring(xmlstring)
             total_items = int(root.findall('.//{http://api.namecheap.com/xml.response}TotalItems')[0].text)
         except Exception as e:
             _logger.exception(e)
@@ -162,8 +163,8 @@ class Namecheap(RegistrarAgent):
                     return
                 xmlstring = await response.text()
 
-        print(xmlstring)
         try:
+            root = ElementTree.fromstring(xmlstring)
             total_items = int(root.findall('.//{http://api.namecheap.com/xml.response}TotalItems')[0].text)
         except Exception as e:
             _logger.exception(e)
@@ -232,8 +233,8 @@ class Namecheap(RegistrarAgent):
                     return
                 xmlstring = await response.text()
 
-        print(xmlstring)
         try:
+            root = ElementTree.fromstring(xmlstring)
             total_items = int(root.findall('.//{http://api.namecheap.com/xml.response}TotalItems')[0].text)
         except Exception as e:
             _logger.exception(e)

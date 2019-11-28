@@ -15,14 +15,13 @@ from sdmgr.dns_provider import DomainNotHostedException
 import logging
 _logger = logging.getLogger(__name__)
 
-
 async def fetch_records_from_dns(domain, type):
     try:
         resolver = aiodns.DNSResolver()
         rr = await resolver.query(domain, type)
         return [x.host for x in rr]
     except aiodns.error.DNSError as e:
-        _logger.exception(e)
+        _logger.error(f"Fetching {type} records from DNS for {domain}: {e}")
         return []
 
 async def dns_a_record_already_set(a_record):
@@ -51,6 +50,7 @@ class ManagerStatusCheck:
         self.endTime = datetime.datetime.now()
         self.success = False
         self.output = output
+        _logger.error(output)
         return await self._finish()
 
     async def _finish(self):
@@ -181,8 +181,8 @@ class Manager:
         except KeyError:
             return (None, f"DNS provider '{domain.dns}' agent not loaded.")
 
-    # TODO: Finish testing/documenting.
-    async def check_all_active_domains(self):
+    # Manager main loop, repeated regularly to keep an eye on things
+    async def main_loop(self):
         """
         Check all active domains in a certain order. Intended to be run on a schedule.
         """
@@ -208,8 +208,11 @@ class Manager:
 
         tasks = []
 
+        # First, check the domain NS records are set correctly
         tasks.append(asyncio.create_task(self.check_domain_ns_records(domain)))
-        tasks.append(asyncio.create_task(self.check_domain_a_records(domain)))
+
+        # Then, check that A records are set correctly
+        #tasks.append(asyncio.create_task(self.check_domain_a_records(domain)))
         # [TODO] Other checks...
 
         for task in tasks:
@@ -237,6 +240,8 @@ class Manager:
 
     async def check_domain_ns_records(self, domain):
         status = ManagerStatusCheck("domain", domain.name, "ns_records")
+
+        # Which DNS agent is responsible for this domain
         (dns_agent, error) = await self._fetch_dns_agent(domain)
         if error is not None:
             return await status.error(error)
@@ -261,6 +266,7 @@ class Manager:
 
         # What do public nameservers tell us the NS are currently set to?
         try:
+            _logger.debug(f"Retrieving actual NS records for {domain.name} from DNS...")
             dns_ns = await fetch_records_from_dns(domain.name, 'NS')
             dns_ns_resolved = [resolve(x) for x in dns_ns]
 
@@ -276,7 +282,7 @@ class Manager:
             return await status.error(f"Exception occurred while resolving NS records: {str(e)}")
 
         # Otherwise, things look hunky-dorey NS record wise.
-        _logger.info(f"NS records match records from {dns_agent.label}.")
+        _logger.info(f"NS records match records from {dns_agent.label} for {domain.name}.")
         return await status.success()
 
     async def check_domain_a_records(self, domain):
@@ -480,10 +486,10 @@ class Manager:
 
             # Prepare the main manager loop
             async def monitoring_loop(frequency):
-                _logger.info("Starting monitoring event loop, to run every {frequency} secs.")
+                _logger.info(f"Starting monitoring event loop, to run every {frequency} secs.")
                 try:
                     while True:
-                        asyncio.create_task(self.check_all_active_domains())
+                        asyncio.create_task(self.main_loop())
                         await asyncio.sleep(frequency)
                 except Exception as e:
                     _logger.exception(e)
