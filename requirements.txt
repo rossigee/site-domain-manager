@@ -1,7 +1,7 @@
 gunicorn
 uvicorn
 starlette==0.12.9
-fastapi==0.38.1
+fastapi==0.65.2
 pyjwt
 databases
 orm
