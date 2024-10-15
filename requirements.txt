@@ -1,6 +1,6 @@
 gunicorn
 uvicorn
-starlette==0.36.2
+starlette==0.40.0
 fastapi==0.109.1
 pyjwt
 databases
